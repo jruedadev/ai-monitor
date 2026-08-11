@@ -56,6 +56,7 @@ const TAB_LABELS = {
 
 function fmtNum(n) { return (n || 0).toLocaleString(); }
 function fmtCost(n) { return n == null ? "—" : "$" + n.toFixed(2); }
+function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
 
 function renderProjectTable(data) {
   const rows = Object.entries(data).sort((a, b) => (b[1].total_tokens||0) - (a[1].total_tokens||0));
@@ -69,8 +70,11 @@ function renderProjectTable(data) {
   html += `<table><thead><tr><th>Proyecto</th><th class="num">Tokens</th><th class="num">Costo</th>
     <th class="num">Msgs</th><th class="num">Sesiones</th></tr></thead><tbody>`;
   for (const [name, v] of rows) {
-    html += `<tr><td class="pname" title="${name}">${name}</td>
-      <td class="num">${fmtNum(v.total_tokens)}</td><td class="num">${fmtCost(v.cost)}</td>
+    const costLabel = v.cost_incomplete
+      ? `<span title="costo incompleto: incluye mensajes con modelos no mapeados">${fmtCost(v.cost)}*</span>`
+      : fmtCost(v.cost);
+    html += `<tr><td class="pname" title="${esc(name)}">${esc(name)}</td>
+      <td class="num">${fmtNum(v.total_tokens)}</td><td class="num">${costLabel}</td>
       <td class="num">${v.messages || 0}</td><td class="num">${v.session_count || 0}</td></tr>`;
   }
   html += `</tbody></table>`;
@@ -79,13 +83,13 @@ function renderProjectTable(data) {
 
 function renderOpenRouter(data) {
   if (data.unavailable) {
-    return `<div class="notice">OpenRouter no disponible: ${data.reason}</div>`;
+    return `<div class="notice">OpenRouter no disponible: ${esc(data.reason)}</div>`;
   }
   const rows = Object.entries(data.models || {}).sort((a, b) => b[1].tokens - a[1].tokens);
   let html = `<table><thead><tr><th>Modelo</th><th class="num">Tokens</th>
     <th class="num">Costo</th><th class="num">Requests</th></tr></thead><tbody>`;
   for (const [model, v] of rows) {
-    html += `<tr><td class="pname" title="${model}">${model}</td>
+    html += `<tr><td class="pname" title="${esc(model)}">${esc(model)}</td>
       <td class="num">${fmtNum(v.tokens)}</td><td class="num">${fmtCost(v.cost)}</td>
       <td class="num">${v.requests}</td></tr>`;
   }
@@ -125,6 +129,6 @@ tabKeys.forEach((key, i) => {
 
 def render(sources, combined, generated_at):
     html = _HTML.replace("__GENERATED_AT__", generated_at)
-    html = html.replace("__SOURCES__", json.dumps(sources))
-    html = html.replace("__COMBINED__", json.dumps(combined))
+    html = html.replace("__SOURCES__", json.dumps(sources).replace("<", "\\u003c"))
+    html = html.replace("__COMBINED__", json.dumps(combined).replace("<", "\\u003c"))
     return html

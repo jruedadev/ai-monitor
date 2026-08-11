@@ -18,7 +18,7 @@ def collect(projects_dir=None):
 
     projects = defaultdict(lambda: {
         "input": 0, "output": 0, "cache_read": 0, "cache_write": 0,
-        "cost": 0.0, "messages": 0, "sessions": set(),
+        "cost": 0.0, "cost_incomplete": False, "messages": 0, "sessions": set(),
         "sessions_detail": defaultdict(lambda: {
             "tokens": 0, "cost": 0.0, "title": None, "last_ts": None, "cwd": None
         }),
@@ -77,9 +77,12 @@ def collect(projects_dir=None):
                 out = usage.get("output_tokens", 0) or 0
                 cr = usage.get("cache_read_input_tokens", 0) or 0
                 cw = usage.get("cache_creation_input_tokens", 0) or 0
-                c = cost_of(inp, out, cr, cw, model) or 0.0
+                raw_cost = cost_of(inp, out, cr, cw, model)
+                c = raw_cost or 0.0
 
                 p = projects[resolved_name]
+                if raw_cost is None:
+                    p["cost_incomplete"] = True
                 p["input"] += inp
                 p["output"] += out
                 p["cache_read"] += cr
@@ -102,6 +105,7 @@ def collect(projects_dir=None):
             "cache_read": p["cache_read"], "cache_write": p["cache_write"],
             "total_tokens": p["input"] + p["output"] + p["cache_read"] + p["cache_write"],
             "cost": round(p["cost"], 4),
+            "cost_incomplete": p["cost_incomplete"],
             "messages": p["messages"],
             "session_count": len(p["sessions"]),
             "sessions_detail": [

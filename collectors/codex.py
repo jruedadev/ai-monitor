@@ -25,7 +25,7 @@ def collect(state_db_path=None):
 
     projects = defaultdict(lambda: {
         "input": 0, "output": 0, "cache_read": 0, "cache_write": 0,
-        "cost": 0.0, "messages": 0, "session_count": 0, "sessions_detail": [],
+        "cost": 0.0, "cost_incomplete": False, "messages": 0, "session_count": 0, "sessions_detail": [],
     })
 
     for row in rows:
@@ -36,9 +36,12 @@ def collect(state_db_path=None):
             # No hay desglose input/output en Codex: se trata todo como "input"
             # para que el total_tokens sea correcto; el costo usa el mismo total
             # como input puro (aproximación documentada en el README).
-            cost = cost_of(tokens_used, 0, 0, 0, model) or 0.0
+            raw_cost = cost_of(tokens_used, 0, 0, 0, model)
+            cost = raw_cost or 0.0
 
             p = projects[cwd]
+            if raw_cost is None:
+                p["cost_incomplete"] = True
             p["input"] += tokens_used
             p["cost"] += cost
             p["messages"] += 1
@@ -61,6 +64,7 @@ def collect(state_db_path=None):
             "input": p["input"], "output": 0, "cache_read": 0, "cache_write": 0,
             "total_tokens": p["input"],
             "cost": round(p["cost"], 4),
+            "cost_incomplete": p["cost_incomplete"],
             "messages": p["messages"],
             "session_count": p["session_count"],
             "sessions_detail": p["sessions_detail"],

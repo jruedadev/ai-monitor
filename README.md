@@ -11,7 +11,7 @@ Dashboard local de uso de IA: agrega tokens y costo por proyecto a partir de los
 | OpenCode | `~/.local/share/opencode/opencode.db` | proyecto (directory) |
 | OpenRouter | API `openrouter.ai/api/v1/activity` (requiere `OPENROUTER_API_KEY`) | modelo |
 
-Cada fuente que no esté instalada, o cuya key no esté configurada, se omite con un aviso — el resto del dashboard sigue funcionando.
+Cada fuente que no esté instalada, o cuya key no esté configurada, se omite silenciosamente de la tabla — solo OpenRouter muestra un aviso explícito cuando falta la API key. El resto del dashboard sigue funcionando.
 
 ## Uso
 
@@ -34,7 +34,7 @@ Sin esta variable, la pestaña de OpenRouter muestra un aviso en vez de datos; e
 ## Instalación (alias + actualización automática)
 
 1. Clona el repo donde prefieras.
-2. Agrega una línea a tu `~/.bashrc` (o `~/.zshrc`) apuntando a donde lo clonaste:
+2. Agrega una línea a tu `~/.bashrc` apuntando a donde lo clonaste:
 
    ```bash
    source "/ruta/donde/clonaste/ai-monitor/shell/aliases.sh"
@@ -55,6 +55,7 @@ Sin esta variable, la pestaña de OpenRouter muestra un aviso en vez de datos; e
 ## Sobre el costo estimado
 
 - Claude Code y Codex: costo **estimado** con una tabla de precios de lista por modelo (`collectors/pricing.py`). Si el modelo no está mapeado, el costo de esa sesión no se estima (no se usa un precio por defecto que podría ser incorrecto).
+- Codex no expone un desglose de tokens por input/output/cache — solo un total `tokens_used` por hilo. Por eso el costo de Codex se estima tratando ese total como si fueran todos tokens de input; es una aproximación que puede sobre o subestimar el costo real según la mezcla real de tokens de cada sesión.
 - OpenCode: usa el costo que **OpenCode ya calculó** para cada sesión — no se re-estima.
 - OpenRouter: costo real reportado por su API.
 
