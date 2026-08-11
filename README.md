@@ -1,55 +1,87 @@
 # ai-monitor
 
-Script en Python para analizar el uso local de **Claude Code** por proyecto: tokens consumidos, costo estimado y las tareas/sesiones más pesadas. Lee directamente los transcripts que Claude Code guarda en `~/.claude/projects/*/*.jsonl`, sin depender de ninguna API externa.
+Dashboard local de uso de IA: agrega tokens y costo por proyecto a partir de los datos que **Claude Code**, **Codex** y **OpenCode** guardan localmente, más el consumo reportado por **OpenRouter** vía su API. Sin dependencias externas — solo librería estándar de Python.
 
-## Requisitos
+## Fuentes soportadas
 
-- Python 3.8+ (sin dependencias externas, solo librería estándar)
-- Haber usado Claude Code al menos una vez en la máquina (para que existan transcripts en `~/.claude/projects/`)
+| Fuente | De dónde lee | Agrupa por |
+|---|---|---|
+| Claude Code | `~/.claude/projects/*/*.jsonl` | proyecto (cwd real) |
+| Codex | `~/.codex/state_5.sqlite` | proyecto (cwd) |
+| OpenCode | `~/.local/share/opencode/opencode.db` | proyecto (directory) |
+| OpenRouter | API `openrouter.ai/api/v1/activity` (requiere `OPENROUTER_API_KEY`) | modelo |
+
+Cada fuente que no esté instalada, o cuya key no esté configurada, se omite con un aviso — el resto del dashboard sigue funcionando.
 
 ## Uso
 
 ```bash
-# Resumen en tabla dentro de la terminal
-python3 claude_usage.py
-
-# Volcar el agregado completo en JSON (útil para integrarlo con otras herramientas)
-python3 claude_usage.py --json
-
-# Generar un dashboard HTML autocontenido
-python3 claude_usage.py --html dashboard.html
+python3 main.py                     # tabla combinada en terminal (Claude+Codex+OpenCode)
+python3 main.py --json              # todas las fuentes crudas + vista combinada, en JSON
+python3 main.py --html out.html     # dashboard HTML con pestañas por fuente
 ```
 
-El dashboard HTML no tiene dependencias externas (sin CDN, sin conexión a internet) y se adapta automáticamente a tema claro/oscuro según las preferencias del sistema.
+## OpenRouter
 
-### Alias recomendados
-
-Agrega esto a tu `~/.bashrc` (o `~/.zshrc`) para tener acceso rápido:
+Genera una API key en https://openrouter.ai/keys y expórtala:
 
 ```bash
-claude-usage() {
-    python3 ~/DEV/JRDV/ai-monitor/claude_usage.py --html ~/claude-usage.html && xdg-open ~/claude-usage.html >/dev/null 2>&1 &
-}
-alias claude-usage-table='python3 ~/DEV/JRDV/ai-monitor/claude_usage.py'
+export OPENROUTER_API_KEY="sk-or-..."
 ```
 
-Luego recarga la shell (`source ~/.bashrc`) y usa:
+Sin esta variable, la pestaña de OpenRouter muestra un aviso en vez de datos; el resto del dashboard no se ve afectado.
 
-- `claude-usage` → regenera el dashboard HTML y lo abre en el navegador.
-- `claude-usage-table` → imprime el resumen directamente en la terminal.
+## Instalación (alias + actualización automática)
 
-## Qué muestra
+1. Clona el repo donde prefieras.
+2. Agrega una línea a tu `~/.bashrc` (o `~/.zshrc`) apuntando a donde lo clonaste:
 
-- **Por proyecto**: tokens de entrada/salida/caché, costo estimado, cantidad de mensajes y de sesiones — agrupado por el directorio de trabajo real (`cwd`) capturado en cada sesión, no por el nombre de carpeta codificado que usa Claude Code internamente.
-- **Tareas/sesiones más pesadas**: ranking por tokens consumidos, con el título real de la sesión (cuando Claude Code lo generó) para identificar rápido qué tarea disparó más consumo.
-- **Totales globales**: tokens y costo estimado sumado de todos los proyectos.
+   ```bash
+   source "/ruta/donde/clonaste/ai-monitor/shell/aliases.sh"
+   ```
+
+3. Recarga la shell (`source ~/.bashrc`). Quedan disponibles:
+   - `claude-usage` → regenera `~/claude-usage.html` y lo abre en el navegador.
+   - `claude-usage-table` → imprime la tabla combinada en la terminal.
+
+4. (Opcional) Para que el dashboard se mantenga fresco solo, corre:
+
+   ```bash
+   ./install.sh
+   ```
+
+   Detecta automáticamente dónde quedó el repo y genera una unidad `systemd --user` que regenera el HTML cada 15 minutos. El script imprime el comando final (`systemctl --user enable --now ai-monitor.timer`) sin ejecutarlo — lo corres tú cuando quieras activarlo.
 
 ## Sobre el costo estimado
 
-El costo se calcula con precios de lista de la API pública de Anthropic por modelo (`claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`, `claude-fable-5`), usando los tokens de entrada, salida, lectura de caché y escritura de caché reportados en cada mensaje.
+- Claude Code y Codex: costo **estimado** con una tabla de precios de lista por modelo (`collectors/pricing.py`). Si el modelo no está mapeado, el costo de esa sesión no se estima (no se usa un precio por defecto que podría ser incorrecto).
+- OpenCode: usa el costo que **OpenCode ya calculó** para cada sesión — no se re-estima.
+- OpenRouter: costo real reportado por su API.
 
-**Importante**: si usas un plan de suscripción (Pro/Max) en lugar de facturación por API, el costo real que pagas no es este — es un proxy relativo útil para comparar qué tan "pesado" es un proyecto o una tarea frente a otro, no una factura real.
+Ninguno de estos números refleja lo que realmente pagas si usas un plan de suscripción (Pro/Max) en vez de facturación por API — son un proxy relativo para comparar qué tan pesado es un proyecto o tarea frente a otro.
 
-## Cómo funciona
+**Nota sobre OpenCode + OpenRouter**: cuando OpenCode enruta un modelo a través de OpenRouter, ese consumo puede aparecer en ambas pestañas. La vista "Todo" combinada solo suma Claude Code + Codex + OpenCode (nunca OpenRouter) para evitar doble conteo.
 
-Claude Code guarda un archivo `.jsonl` por sesión dentro de `~/.claude/projects/<carpeta-codificada>/`. Cada línea es un evento; el script filtra los mensajes de tipo `assistant` que traen un bloque `usage` con el conteo de tokens, y los agrupa por el `cwd` real de la sesión (más legible que el nombre de carpeta codificado, que reemplaza `/` por `-`).
+## Arquitectura
+
+```
+main.py                # CLI: --json / --html / tabla por defecto
+collectors/
+  pricing.py            # tabla de precios compartida
+  claude_code.py         # ~/.claude/projects/*.jsonl
+  codex.py                # ~/.codex/state_5.sqlite
+  opencode.py              # ~/.local/share/opencode/opencode.db
+  openrouter.py             # API REST openrouter.ai
+dashboard/
+  template.py               # HTML con pestañas, self-contained
+shell/aliases.sh              # alias portables (BASH_SOURCE-relativo)
+install.sh                     # genera unidad systemd --user
+```
+
+Cada collector expone `collect(...)` con un parámetro opcional para inyectar la ruta/fuente en tests, y se degrada a `{}` (o `{"unavailable": True, "reason": ...}` en OpenRouter) si la plataforma no está instalada — nunca lanza una excepción que tumbe el resto del dashboard.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
