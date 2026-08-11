@@ -1,0 +1,6 @@
+[Unit]
+Description=ai-monitor: regenerar dashboard de uso de IA
+
+[Service]
+Type=oneshot
+ExecStart=__PYTHON__ __REPO_DIR__/main.py --html %h/claude-usage.html

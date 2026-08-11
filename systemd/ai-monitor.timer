@@ -1,0 +1,10 @@
+[Unit]
+Description=Regenerar el dashboard de ai-monitor cada 15 minutos
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+Unit=ai-monitor.service
+
+[Install]
+WantedBy=timers.target
