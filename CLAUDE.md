@@ -35,7 +35,7 @@ Key design point: aggregation keys are **resolved `cwd` paths**, not the encoded
 
 ```bash
 claude-usage() {
-    python3 ~/DEV/JRDV/jrdv-ai-monitor/claude_usage.py --html ~/claude-usage.html && xdg-open ~/claude-usage.html >/dev/null 2>&1 &
+    python3 ~/DEV/JRDV/ai-monitor/claude_usage.py --html ~/claude-usage.html && xdg-open ~/claude-usage.html >/dev/null 2>&1 &
 }
-alias claude-usage-table='python3 ~/DEV/JRDV/jrdv-ai-monitor/claude_usage.py'
+alias claude-usage-table='python3 ~/DEV/JRDV/ai-monitor/claude_usage.py'
 ```

@@ -1,4 +1,4 @@
-# jrdv-ai-monitor
+# ai-monitor
 
 Script en Python para analizar el uso local de **Claude Code** por proyecto: tokens consumidos, costo estimado y las tareas/sesiones más pesadas. Lee directamente los transcripts que Claude Code guarda en `~/.claude/projects/*/*.jsonl`, sin depender de ninguna API externa.
 
@@ -28,9 +28,9 @@ Agrega esto a tu `~/.bashrc` (o `~/.zshrc`) para tener acceso rápido:
 
 ```bash
 claude-usage() {
-    python3 ~/DEV/JRDV/jrdv-ai-monitor/claude_usage.py --html ~/claude-usage.html && xdg-open ~/claude-usage.html >/dev/null 2>&1 &
+    python3 ~/DEV/JRDV/ai-monitor/claude_usage.py --html ~/claude-usage.html && xdg-open ~/claude-usage.html >/dev/null 2>&1 &
 }
-alias claude-usage-table='python3 ~/DEV/JRDV/jrdv-ai-monitor/claude_usage.py'
+alias claude-usage-table='python3 ~/DEV/JRDV/ai-monitor/claude_usage.py'
 ```
 
 Luego recarga la shell (`source ~/.bashrc`) y usa:

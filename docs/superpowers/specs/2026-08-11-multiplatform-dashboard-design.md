@@ -5,7 +5,7 @@
 
 ## Contexto
 
-`jrdv-ai-monitor` ya tiene un script (`claude_usage.py`) que agrega tokens/costo por proyecto a partir de los transcripts locales de Claude Code (`~/.claude/projects/*.jsonl`). El objetivo de este diseño es extender esa idea a otras plataformas de IA que el usuario usa localmente: **Codex**, **OpenCode** y **OpenRouter**. Se investigó también **Hermes Agent** y **Antigravity**, pero se excluyen de esta fase:
+`ai-monitor` ya tiene un script (`claude_usage.py`) que agrega tokens/costo por proyecto a partir de los transcripts locales de Claude Code (`~/.claude/projects/*.jsonl`). El objetivo de este diseño es extender esa idea a otras plataformas de IA que el usuario usa localmente: **Codex**, **OpenCode** y **OpenRouter**. Se investigó también **Hermes Agent** y **Antigravity**, pero se excluyen de esta fase:
 
 - **Hermes**: es una app Electron; sus datos viven en perfil tipo Chrome (LevelDB/IndexedDB/Cache), sin un log estructurado de uso accesible. No hay evidencia de que exponga tokens/costo en un formato parseable.
 - **Antigravity**: no se encontró ningún rastro local en esta máquina. Puede no estar instalado, o solo mantener estado en la nube.
@@ -40,7 +40,7 @@ Ambas quedan fuera del alcance; se podrán reevaluar si en el futuro se confirma
 ## Arquitectura de código
 
 ```
-jrdv-ai-monitor/
+ai-monitor/
   main.py                    # orquesta collectors, genera tabla/JSON/HTML
   collectors/
     __init__.py
@@ -51,8 +51,8 @@ jrdv-ai-monitor/
   dashboard/
     template.py                # HTML_TEMPLATE con pestañas
   systemd/
-    jrdv-ai-monitor.service.template   # placeholders, sin rutas de usuario
-    jrdv-ai-monitor.timer
+    ai-monitor.service.template   # placeholders, sin rutas de usuario
+    ai-monitor.timer
   shell/
     aliases.sh                # alias/función, ruta a main.py resuelta vía BASH_SOURCE
   install.sh                  # genera la unit systemd con la ruta real del repo
@@ -76,9 +76,9 @@ Mismo estilo visual que el actual (self-contained: sin CDN, sin llamadas de red 
 
 ## Automatización (systemd --user)
 
-- `systemd/jrdv-ai-monitor.service.template`: contiene placeholders (`__REPO_DIR__`, `__PYTHON__`) en vez de rutas reales — no se instala directamente.
-- `systemd/jrdv-ai-monitor.timer`: `OnUnitActiveSec=15min` (más `OnBootSec` corto para que corra una vez al iniciar sesión). No tiene rutas de usuario, se copia tal cual.
-- `install.sh`: script que el usuario corre una vez tras clonar. Detecta automáticamente dónde quedó el repo (`REPO_DIR="$(cd "$(dirname "$0")" && pwd)"`) y el intérprete de Python (`command -v python3`), sustituye los placeholders del `.service.template`, escribe el resultado en `~/.config/systemd/user/jrdv-ai-monitor.service`, copia el `.timer` al mismo directorio, y deja pendiente (con instrucciones impresas, sin ejecutarlo automáticamente) el `systemctl --user enable --now jrdv-ai-monitor.timer` — no se activa un timer sin que el usuario corra ese último comando él mismo.
+- `systemd/ai-monitor.service.template`: contiene placeholders (`__REPO_DIR__`, `__PYTHON__`) en vez de rutas reales — no se instala directamente.
+- `systemd/ai-monitor.timer`: `OnUnitActiveSec=15min` (más `OnBootSec` corto para que corra una vez al iniciar sesión). No tiene rutas de usuario, se copia tal cual.
+- `install.sh`: script que el usuario corre una vez tras clonar. Detecta automáticamente dónde quedó el repo (`REPO_DIR="$(cd "$(dirname "$0")" && pwd)"`) y el intérprete de Python (`command -v python3`), sustituye los placeholders del `.service.template`, escribe el resultado en `~/.config/systemd/user/ai-monitor.service`, copia el `.timer` al mismo directorio, y deja pendiente (con instrucciones impresas, sin ejecutarlo automáticamente) el `systemctl --user enable --now ai-monitor.timer` — no se activa un timer sin que el usuario corra ese último comando él mismo.
 
 ## Alias de shell
 
@@ -96,7 +96,7 @@ alias claude-usage-table='python3 "$_JRDV_AI_MONITOR_DIR/main.py"'
 El único paso manual que le queda al usuario, documentado en el README, es agregar **una línea** a su `~/.bashrc` (o `~/.zshrc`) apuntando a donde clonó el repo:
 
 ```bash
-source "/ruta/donde/clonaste/jrdv-ai-monitor/shell/aliases.sh"
+source "/ruta/donde/clonaste/ai-monitor/shell/aliases.sh"
 ```
 
 Esto es el mismo patrón que usan herramientas como nvm/pyenv: un único punto de configuración explícito por parte del usuario, sin rutas hardcodeadas dentro del código versionado.
