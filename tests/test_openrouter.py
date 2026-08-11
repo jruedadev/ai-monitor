@@ -30,6 +30,15 @@ class TestOpenRouterCollector(unittest.TestCase):
         self.assertIn("anthropic/claude-sonnet-5", data["models"])
         self.assertAlmostEqual(data["by_day"]["2026-08-11"]["cost"], 1.25)
 
+    def test_malformed_response_marks_unavailable(self):
+        data = openrouter.collect(api_key="fake-key", fetch=lambda url, key: "not a dict")
+        self.assertTrue(data["unavailable"])
+        self.assertIn("reason", data)
+
+        data_none = openrouter.collect(api_key="fake-key", fetch=lambda url, key: None)
+        self.assertTrue(data_none["unavailable"])
+        self.assertIn("reason", data_none)
+
     def test_fetch_error_marks_unavailable_with_reason(self):
         def failing_fetch(url, key):
             raise RuntimeError("HTTP 401")

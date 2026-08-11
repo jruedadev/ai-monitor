@@ -27,24 +27,26 @@ def collect(api_key=None, fetch=None):
 
     try:
         response = fetch(ACTIVITY_URL, api_key)
+        if not isinstance(response, dict):
+            raise ValueError(f"respuesta inesperada de OpenRouter: {type(response).__name__}")
+
+        models = defaultdict(lambda: {"tokens": 0, "cost": 0.0, "requests": 0})
+        by_day = defaultdict(lambda: {"tokens": 0, "cost": 0.0})
+
+        for row in response.get("data", []):
+            model = row.get("model", "unknown")
+            date = row.get("date", "unknown")
+            cost = row.get("usage", 0.0) or 0.0
+            tokens = (row.get("prompt_tokens", 0) or 0) + (row.get("completion_tokens", 0) or 0)
+
+            models[model]["tokens"] += tokens
+            models[model]["cost"] += cost
+            models[model]["requests"] += 1
+
+            by_day[date]["tokens"] += tokens
+            by_day[date]["cost"] += cost
     except Exception as e:
         return {"unavailable": True, "reason": str(e)}
-
-    models = defaultdict(lambda: {"tokens": 0, "cost": 0.0, "requests": 0})
-    by_day = defaultdict(lambda: {"tokens": 0, "cost": 0.0})
-
-    for row in response.get("data", []):
-        model = row.get("model", "unknown")
-        date = row.get("date", "unknown")
-        cost = row.get("usage", 0.0) or 0.0
-        tokens = (row.get("prompt_tokens", 0) or 0) + (row.get("completion_tokens", 0) or 0)
-
-        models[model]["tokens"] += tokens
-        models[model]["cost"] += cost
-        models[model]["requests"] += 1
-
-        by_day[date]["tokens"] += tokens
-        by_day[date]["cost"] += cost
 
     return {
         "unavailable": False,
