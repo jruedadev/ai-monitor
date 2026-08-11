@@ -29,27 +29,31 @@ def collect(state_db_path=None):
     })
 
     for row in rows:
-        cwd = row["cwd"] or "unknown"
-        tokens_used = row["tokens_used"] or 0
-        model = row["model"]
-        # No hay desglose input/output en Codex: se trata todo como "input"
-        # para que el total_tokens sea correcto; el costo usa el mismo total
-        # como input puro (aproximación documentada en el README).
-        cost = cost_of(tokens_used, 0, 0, 0, model) or 0.0
+        try:
+            cwd = row["cwd"] or "unknown"
+            tokens_used = row["tokens_used"] or 0
+            model = row["model"]
+            # No hay desglose input/output en Codex: se trata todo como "input"
+            # para que el total_tokens sea correcto; el costo usa el mismo total
+            # como input puro (aproximación documentada en el README).
+            cost = cost_of(tokens_used, 0, 0, 0, model) or 0.0
 
-        p = projects[cwd]
-        p["input"] += tokens_used
-        p["cost"] += cost
-        p["messages"] += 1
-        p["session_count"] += 1
-        p["sessions_detail"].append({
-            "session_id": row["id"],
-            "tokens": tokens_used,
-            "cost": round(cost, 4),
-            "title": row["title"],
-            "last_ts": row["created_at"],
-            "cwd": cwd,
-        })
+            p = projects[cwd]
+            p["input"] += tokens_used
+            p["cost"] += cost
+            p["messages"] += 1
+            p["session_count"] += 1
+            p["sessions_detail"].append({
+                "session_id": row["id"],
+                "tokens": tokens_used,
+                "cost": round(cost, 4),
+                "title": row["title"],
+                "last_ts": row["created_at"],
+                "cwd": cwd,
+            })
+        except (KeyError, TypeError, ValueError):
+            # Skip rows with unexpected data types or missing fields
+            continue
 
     out = {}
     for name, p in projects.items():
