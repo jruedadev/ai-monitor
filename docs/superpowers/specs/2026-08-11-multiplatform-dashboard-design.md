@@ -51,11 +51,16 @@ jrdv-ai-monitor/
   dashboard/
     template.py                # HTML_TEMPLATE con pestañas
   systemd/
-    jrdv-ai-monitor.service
+    jrdv-ai-monitor.service.template   # placeholders, sin rutas de usuario
     jrdv-ai-monitor.timer
+  shell/
+    aliases.sh                # alias/función, ruta a main.py resuelta vía BASH_SOURCE
+  install.sh                  # genera la unit systemd con la ruta real del repo
   README.md
   CLAUDE.md
 ```
+
+**Portabilidad**: nada en el repo debe contener una ruta absoluta que asuma dónde se clonó ni de qué usuario es (nada de `/home/jruedadev/...` ni `~/DEV/JRDV/...` hardcodeado). `main.py` y los collectors ya son portables por construcción, porque resuelven todo relativo a `~` del usuario que los ejecuta (`os.path.expanduser`). Lo que sí necesita resolución dinámica es la ubicación del propio repo para el alias y la unidad systemd — ver las dos secciones siguientes.
 
 Cada collector de fuente "por proyecto" (`claude_code`, `codex`, `opencode`) expone la misma forma de datos que ya usa `claude_usage.py` hoy: `{input, output, cache_read, cache_write, total_tokens, cost, messages, session_count, sessions_detail: [...]}`, para que `main.py` los pueda combinar sin lógica especial por fuente. `openrouter.py` expone una forma distinta (por modelo, con actividad diaria) que se renderiza en su propia sección.
 
@@ -71,20 +76,30 @@ Mismo estilo visual que el actual (self-contained: sin CDN, sin llamadas de red 
 
 ## Automatización (systemd --user)
 
-- `jrdv-ai-monitor.service`: `ExecStart=python3 <repo>/main.py --html %h/claude-usage.html`.
-- `jrdv-ai-monitor.timer`: `OnUnitActiveSec=15min` (más `OnBootSec` corto para que corra una vez al iniciar sesión).
-- Instalación: copiar/symlinkear ambos units a `~/.config/systemd/user/` y `systemctl --user enable --now jrdv-ai-monitor.timer`. El README documenta este paso manual (no se automatiza la instalación del timer desde el script, para no tocar `systemctl` sin que el usuario lo apruebe explícitamente).
+- `systemd/jrdv-ai-monitor.service.template`: contiene placeholders (`__REPO_DIR__`, `__PYTHON__`) en vez de rutas reales — no se instala directamente.
+- `systemd/jrdv-ai-monitor.timer`: `OnUnitActiveSec=15min` (más `OnBootSec` corto para que corra una vez al iniciar sesión). No tiene rutas de usuario, se copia tal cual.
+- `install.sh`: script que el usuario corre una vez tras clonar. Detecta automáticamente dónde quedó el repo (`REPO_DIR="$(cd "$(dirname "$0")" && pwd)"`) y el intérprete de Python (`command -v python3`), sustituye los placeholders del `.service.template`, escribe el resultado en `~/.config/systemd/user/jrdv-ai-monitor.service`, copia el `.timer` al mismo directorio, y deja pendiente (con instrucciones impresas, sin ejecutarlo automáticamente) el `systemctl --user enable --now jrdv-ai-monitor.timer` — no se activa un timer sin que el usuario corra ese último comando él mismo.
 
 ## Alias de shell
 
-`~/.bashrc` se actualiza:
+El repo trae `shell/aliases.sh`, que resuelve la ruta a `main.py` relativa a su propia ubicación (no a un usuario/carpeta fijos):
 
 ```bash
+_JRDV_AI_MONITOR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 claude-usage() {
-    python3 ~/DEV/JRDV/jrdv-ai-monitor/main.py --html ~/claude-usage.html && xdg-open ~/claude-usage.html >/dev/null 2>&1 &
+    python3 "$_JRDV_AI_MONITOR_DIR/main.py" --html "$HOME/claude-usage.html" && xdg-open "$HOME/claude-usage.html" >/dev/null 2>&1 &
 }
-alias claude-usage-table='python3 ~/DEV/JRDV/jrdv-ai-monitor/main.py'
+alias claude-usage-table='python3 "$_JRDV_AI_MONITOR_DIR/main.py"'
 ```
+
+El único paso manual que le queda al usuario, documentado en el README, es agregar **una línea** a su `~/.bashrc` (o `~/.zshrc`) apuntando a donde clonó el repo:
+
+```bash
+source "/ruta/donde/clonaste/jrdv-ai-monitor/shell/aliases.sh"
+```
+
+Esto es el mismo patrón que usan herramientas como nvm/pyenv: un único punto de configuración explícito por parte del usuario, sin rutas hardcodeadas dentro del código versionado.
 
 El timer mantiene `~/claude-usage.html` fresco cada 15 min en segundo plano; el alias `claude-usage` sigue forzando una regeneración inmediata antes de abrir, para ver el dato más reciente al instante sin esperar al próximo tick del timer.
 
