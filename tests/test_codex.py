@@ -44,6 +44,21 @@ class TestCodexCollector(unittest.TestCase):
         data = codex.collect(state_db_path="/nonexistent/path/state_5.sqlite")
         self.assertEqual(data, {})
 
+    def test_by_day_derives_date_from_created_at_epoch(self):
+        con = sqlite3.connect(self.tmp.name)
+        con.execute(
+            "INSERT INTO threads (id, cwd, model, tokens_used, created_at, title) VALUES (?,?,?,?,?,?)",
+            ("t2", "/home/user/DEV/demo", "gpt-5.5", 1_000_000, 1754006400, "Segunda"),
+        )  # 1754006400 == 2025-08-01T00:00:00Z
+        con.commit()
+        con.close()
+
+        data = codex.collect(state_db_path=self.tmp.name)
+
+        by_day = data["/home/user/DEV/demo"]["by_day"]
+        self.assertIn("2025-08-01", by_day)
+        self.assertEqual(by_day["2025-08-01"]["tokens"], 1_000_000)
+
 
 if __name__ == "__main__":
     unittest.main()

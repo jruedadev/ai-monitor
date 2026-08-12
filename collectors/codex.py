@@ -2,6 +2,7 @@
 import os
 import sqlite3
 from collections import defaultdict
+from datetime import datetime, timezone
 
 from collectors.pricing import cost_of
 
@@ -25,7 +26,9 @@ def collect(state_db_path=None):
 
     projects = defaultdict(lambda: {
         "input": 0, "output": 0, "cache_read": 0, "cache_write": 0,
-        "cost": 0.0, "cost_incomplete": False, "messages": 0, "session_count": 0, "sessions_detail": [],
+        "cost": 0.0, "cost_incomplete": False, "messages": 0, "session_count": 0,
+        "by_day": defaultdict(lambda: {"tokens": 0, "cost": 0.0}),
+        "sessions_detail": [],
     })
 
     for row in rows:
@@ -46,6 +49,13 @@ def collect(state_db_path=None):
             p["cost"] += cost
             p["messages"] += 1
             p["session_count"] += 1
+
+            created_at = row["created_at"]
+            if created_at:
+                day = datetime.fromtimestamp(created_at, tz=timezone.utc).strftime("%Y-%m-%d")
+                p["by_day"][day]["tokens"] += tokens_used
+                p["by_day"][day]["cost"] += cost
+
             p["sessions_detail"].append({
                 "session_id": row["id"],
                 "tokens": tokens_used,
@@ -67,6 +77,7 @@ def collect(state_db_path=None):
             "cost_incomplete": p["cost_incomplete"],
             "messages": p["messages"],
             "session_count": p["session_count"],
+            "by_day": {k: {"tokens": v["tokens"], "cost": round(v["cost"], 4)} for k, v in p["by_day"].items()},
             "sessions_detail": p["sessions_detail"],
         }
     return out
