@@ -1861,8 +1861,319 @@ git commit -m "docs: documentar el dashboard interactivo, server.py y history.db
 
 ---
 
+### Task 13: `pricing` table in `history.db` — `pricing.py` reads from SQLite, `sync_pricing.py` writes to it
+
+**Context:** opencode había propuesto un `collectors/sync_pricing.py` que compara un `SNAPSHOT` embebido en Python contra `collectors/pricing.py`'s `PRICING` dict (`--write`/`--check`/dry-run). Ambas fuentes quedaban hardcodeadas en código Python, lo cual no resuelve separar datos de código. Esta tarea reemplaza ese diseño: los precios pasan a vivir en una tabla `pricing` dentro del mismo `history.db` que ya crea Task 4, y `sync_pricing.py` se convierte en el único punto de escritura hacia esa tabla.
+
+**Depends on:** Task 4 (`history.py`'s `ensure_schema`/`DB_PATH_DEFAULT`) must exist first — this task extends the same schema and reuses the same DB path convention. Can run any time after Task 4; does not depend on Tasks 5-12.
+
+**Files:**
+- Modify: `history.py` (add `pricing` table to `_SCHEMA`)
+- Modify: `collectors/pricing.py` (read `PRICING` from SQLite, bootstrap from an embedded default snapshot on first run)
+- Create: `collectors/sync_pricing.py`
+- Create: `tests/test_pricing.py` (extend if it already exists) / `tests/test_sync_pricing.py`
+
+**Interfaces:**
+- `history.py`'s `_SCHEMA` gains:
+  ```sql
+  CREATE TABLE IF NOT EXISTS pricing (
+      model TEXT PRIMARY KEY,
+      input REAL, output REAL, cache_read REAL, cache_write REAL,
+      updated_at TEXT NOT NULL
+  );
+  ```
+- `collectors/pricing.py`: `cost_of(model, usage, db_path=None)` — unchanged call signature except the new optional `db_path` (defaults to `history.DB_PATH_DEFAULT`, same override pattern as every other collector). Internally: `_load_pricing(db_path)` queries the `pricing` table; if the table is empty (first run on a fresh `history.db`), it bootstraps the table from a `_DEFAULT_SNAPSHOT` dict embedded in `pricing.py` (the same values that live in `PRICING` today) via `INSERT OR REPLACE`, then re-queries. This keeps `cost_of()` working out of the box with zero setup, exactly like today, while making the DB the source of truth from that point on. Returns `None` for unmapped models, unchanged.
+- `collectors/sync_pricing.py`: a small CLI, same three modes opencode had proposed but writing to SQLite instead of to a Python file:
+  - `python3 -m collectors.sync_pricing` — dry-run, prints a diff between an editable `SNAPSHOT` dict at the top of `sync_pricing.py` and the current `pricing` table rows.
+  - `python3 -m collectors.sync_pricing --write` — `INSERT OR REPLACE` every model in `SNAPSHOT` into the `pricing` table, stamping `updated_at` with the current UTC ISO timestamp.
+  - `python3 -m collectors.sync_pricing --check` — exit code `1` if `SNAPSHOT` differs from the table (for CI), `0` otherwise; no output side effects.
+  - Workflow when Anthropic/OpenAI change prices: edit `SNAPSHOT` in `sync_pricing.py`, run `--write`, run the test suite — same three steps opencode already documented, just pointed at SQLite instead of `pricing.py`.
+
+- [ ] **Step 1: Write the failing tests**
+
+Add to `tests/test_pricing.py` (or create it if it doesn't already exist — check first):
+
+```python
+import os
+import tempfile
+import unittest
+
+from collectors import pricing
+
+
+class TestPricingFromSQLite(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        self.db_path = tmp.name
+
+    def tearDown(self):
+        os.unlink(self.db_path)
+
+    def test_bootstraps_default_snapshot_on_first_use(self):
+        cost = pricing.cost_of(
+            "claude-sonnet-5",
+            {"input_tokens": 1_000_000, "output_tokens": 0,
+             "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0},
+            db_path=self.db_path,
+        )
+        self.assertIsNotNone(cost)
+
+    def test_unmapped_model_returns_none(self):
+        cost = pricing.cost_of(
+            "totally-unknown-model-xyz", {"input_tokens": 100, "output_tokens": 0,
+             "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0},
+            db_path=self.db_path,
+        )
+        self.assertIsNone(cost)
+```
+
+Create `tests/test_sync_pricing.py`:
+
+```python
+import os
+import tempfile
+import unittest
+
+import history
+from collectors import sync_pricing
+
+
+class TestSyncPricing(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        self.db_path = tmp.name
+        history.ensure_schema(self.db_path)
+
+    def tearDown(self):
+        os.unlink(self.db_path)
+
+    def test_write_upserts_snapshot_into_pricing_table(self):
+        sync_pricing.write(db_path=self.db_path)
+
+        import sqlite3
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM pricing")
+        count = cur.fetchone()[0]
+        con.close()
+        self.assertEqual(count, len(sync_pricing.SNAPSHOT))
+
+    def test_check_returns_true_when_table_matches_snapshot(self):
+        sync_pricing.write(db_path=self.db_path)
+        self.assertTrue(sync_pricing.check(db_path=self.db_path))
+
+    def test_check_returns_false_when_table_is_stale(self):
+        # La tabla arranca vacía (sin sync_pricing.write), así que difiere del SNAPSHOT.
+        self.assertFalse(sync_pricing.check(db_path=self.db_path))
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cd ai-monitor && python3 -m unittest tests.test_pricing tests.test_sync_pricing -v`
+Expected: FAIL (`db_path` kwarg not accepted / `ModuleNotFoundError: No module named 'collectors.sync_pricing'`)
+
+- [ ] **Step 3: Extend `history.py`'s schema**
+
+In `history.py`, add the `pricing` table to `_SCHEMA` (Task 4's constant):
+
+```python
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS daily_project (
+    date TEXT NOT NULL, source TEXT NOT NULL, project TEXT NOT NULL,
+    tokens INTEGER NOT NULL, cost REAL,
+    PRIMARY KEY (date, source, project)
+);
+CREATE TABLE IF NOT EXISTS daily_model (
+    date TEXT NOT NULL, model TEXT NOT NULL,
+    tokens INTEGER NOT NULL, cost REAL,
+    PRIMARY KEY (date, model)
+);
+CREATE TABLE IF NOT EXISTS pricing (
+    model TEXT PRIMARY KEY,
+    input REAL, output REAL, cache_read REAL, cache_write REAL,
+    updated_at TEXT NOT NULL
+);
+"""
+```
+
+- [ ] **Step 4: Rewrite `collectors/pricing.py` to read from SQLite with a bootstrap fallback**
+
+Keep whatever per-token cost formula already exists in `cost_of()` — only change where the per-model rate dict comes from. Replace the current hardcoded `PRICING = {...}` module-level dict with a `_DEFAULT_SNAPSHOT` (same values, renamed) used only for bootstrap, plus a small loader:
+
+```python
+import sqlite3
+
+import history
+
+_DEFAULT_SNAPSHOT = {
+    # ... exactly the same {model: {"input": ..., "output": ..., "cache_read": ..., "cache_write": ...}}
+    # entries that PRICING already has today — copy verbatim, do not change any values.
+}
+
+
+def _load_pricing(db_path):
+    if db_path is None:
+        db_path = history.DB_PATH_DEFAULT
+    history.ensure_schema(db_path)
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) AS n FROM pricing")
+    if cur.fetchone()["n"] == 0:
+        import datetime
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        for model, rates in _DEFAULT_SNAPSHOT.items():
+            cur.execute(
+                "INSERT OR REPLACE INTO pricing (model, input, output, cache_read, cache_write, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (model, rates["input"], rates["output"], rates["cache_read"], rates["cache_write"], now),
+            )
+        con.commit()
+
+    cur.execute("SELECT model, input, output, cache_read, cache_write FROM pricing")
+    result = {
+        row["model"]: {"input": row["input"], "output": row["output"],
+                        "cache_read": row["cache_read"], "cache_write": row["cache_write"]}
+        for row in cur.fetchall()
+    }
+    con.close()
+    return result
+
+
+def cost_of(model, usage, db_path=None):
+    rates = _load_pricing(db_path).get(model)
+    if rates is None:
+        return None
+    # ... resto de la fórmula existente, sin cambios, usando `rates` en vez de `PRICING[model]`
+```
+
+Update `claude_code.py`/`codex.py` call sites only if they pass `db_path` explicitly for tests — production call sites (`cost_of(model, usage)`) need no change since `db_path=None` already defaults correctly.
+
+- [ ] **Step 5: Write `collectors/sync_pricing.py`**
+
+```python
+# collectors/sync_pricing.py
+"""CLI para sincronizar precios hacia la tabla `pricing` de history.db.
+Uso:
+  python3 -m collectors.sync_pricing             # dry-run: muestra diff
+  python3 -m collectors.sync_pricing --write      # aplica SNAPSHOT a la tabla
+  python3 -m collectors.sync_pricing --check      # exit 1 si hay diferencias (CI)
+"""
+import argparse
+import datetime
+import sqlite3
+import sys
+
+import history
+
+# Editar aquí cuando un proveedor cambie precios, luego correr --write.
+SNAPSHOT = {
+    # copiar/pegar el mismo contenido que collectors/pricing.py's _DEFAULT_SNAPSHOT
+}
+
+
+def _current_rows(db_path):
+    history.ensure_schema(db_path)
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    cur.execute("SELECT model, input, output, cache_read, cache_write FROM pricing")
+    rows = {r["model"]: dict(r) for r in cur.fetchall()}
+    con.close()
+    return rows
+
+
+def _diff(db_path):
+    current = _current_rows(db_path)
+    added, changed = [], []
+    for model, rates in SNAPSHOT.items():
+        if model not in current:
+            added.append(model)
+        elif {k: current[model][k] for k in ("input", "output", "cache_read", "cache_write")} != rates:
+            changed.append(model)
+    return added, changed
+
+
+def write(db_path=None):
+    if db_path is None:
+        db_path = history.DB_PATH_DEFAULT
+    history.ensure_schema(db_path)
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    con = sqlite3.connect(db_path)
+    cur = con.cursor()
+    for model, rates in SNAPSHOT.items():
+        cur.execute(
+            "INSERT OR REPLACE INTO pricing (model, input, output, cache_read, cache_write, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (model, rates["input"], rates["output"], rates["cache_read"], rates["cache_write"], now),
+        )
+    con.commit()
+    con.close()
+
+
+def check(db_path=None):
+    if db_path is None:
+        db_path = history.DB_PATH_DEFAULT
+    added, changed = _diff(db_path)
+    return not added and not changed
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--write", action="store_true")
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+
+    if args.check:
+        sys.exit(0 if check() else 1)
+
+    added, changed = _diff(None)
+    for m in added:
+        print(f"+ {m} (nuevo)")
+    for m in changed:
+        print(f"~ {m} (precio distinto)")
+    if not added and not changed:
+        print("Sin cambios.")
+
+    if args.write:
+        write()
+        print("Aplicado a la tabla pricing.")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+Run: `cd ai-monitor && python3 -m unittest tests.test_pricing tests.test_sync_pricing -v`
+Expected: PASS
+
+- [ ] **Step 7: Run full suite (regression check on `claude_code.py`/`codex.py`, which call `cost_of`)**
+
+Run: `cd ai-monitor && python3 -m unittest discover -s tests -v`
+Expected: PASS — `cost_of()`'s call signature is unchanged for existing callers (`db_path` is optional and defaults to the real `history.DB_PATH_DEFAULT`, so on a real machine the first call bootstraps `history.db`'s `pricing` table transparently).
+
+- [ ] **Step 8: Commit**
+
+```bash
+cd ai-monitor
+git add history.py collectors/pricing.py collectors/sync_pricing.py tests/test_pricing.py tests/test_sync_pricing.py
+git commit -m "feat: mover precios a tabla SQLite (pricing) y agregar collectors/sync_pricing.py"
+```
+
+---
+
 ## Self-Review Notes
 
-- **Spec coverage**: `by_day` extension to all 4 collectors (Tasks 1-3; OpenRouter already had it), `history.py` persistence with replace-not-delete semantics (Task 4), wiring into `collect_all()` (Task 5), SSE broker (Task 6), `server.py` with `/api/usage`/`/api/stream`/`/api/history`/static serving (Task 7), frontend scaffold + shadcn/ui + Tremor (Task 8), live data + sidebar + KPI cards + table (Task 9), trend chart from `/api/history` + theme toggle (Task 10), systemd + install.sh (Task 11), docs (Task 12). Every section of the 2026-08-11 spec (including its 2026-08-12 persistence addendum) has a corresponding task.
+- **Spec coverage**: `by_day` extension to all 4 collectors (Tasks 1-3; OpenRouter already had it), `history.py` persistence with replace-not-delete semantics (Task 4), wiring into `collect_all()` (Task 5), SSE broker (Task 6), `server.py` with `/api/usage`/`/api/stream`/`/api/history`/static serving (Task 7), frontend scaffold + shadcn/ui + Tremor (Task 8), live data + sidebar + KPI cards + table (Task 9), trend chart from `/api/history` + theme toggle (Task 10), systemd + install.sh (Task 11), docs (Task 12), pricing moved from a hardcoded dict to a SQLite table with a `sync_pricing.py` CLI writer (Task 13, replaces the opencode-proposed Python-to-Python diff design). Every section of the 2026-08-11 spec (including its 2026-08-12 persistence addendum) has a corresponding task.
 - **Placeholder scan**: no TBD/TODO. The `__ENV_FILE__`/`__REPO_DIR__`/`__PYTHON__` tokens in Task 11's service template are intentional install-time placeholders (same pattern as the existing `ai-monitor.service.template`), substituted by `install.sh`, not plan placeholders.
 - **Type/name consistency**: `collect_all(db_path=None)` (Task 5) matches what `server.py` calls in Task 7 (`main.collect_all()`, no args — uses the real default path in production, exactly as intended). `history.record_snapshot(sources, db_path=None)` (Task 4) signature matches its two call sites (Task 5's `main.py`, implicitly via `collect_all`). `SSEBroker.subscribe()/unsubscribe()/publish()` (Task 6) match their usage in `server.py`'s `_handle_sse` (Task 7). `build_app(static_dir, poll_interval_seconds=60, port=0)`'s final signature (Task 7 Step 5) is what Task 7's own test (Step 1, written before the Step 5 refactor) calls with `poll_interval_seconds=3600` and no `port` — confirmed compatible since `port` has a default.
