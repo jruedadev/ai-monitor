@@ -34,6 +34,31 @@ El backend Python mantiene la regla existente del proyecto ("cero dependencias, 
 - **Tema**: claro/oscuro vía `prefers-color-scheme` + toggle manual persistido en `localStorage`, mismo criterio visual que el HTML estático actual.
 - **Desarrollo**: `npm run dev` levanta el servidor de Vite con proxy de `/api/*` hacia `server.py` (corriendo aparte, `python3 server.py`). **Producción**: `npm run build` genera `frontend/dist/`, servido directamente por `server.py` — un solo proceso, un solo puerto, en producción.
 
+## Persistencia histórica: `history.py`
+
+Los collectors leen datos "en vivo" de cada proveedor, así que el histórico visible depende de cuánto retenga cada uno (Claude Code, Codex, OpenCode pueden rotar o truncar sesiones viejas; OpenRouter expone `/api/v1/activity` con su propia ventana). Para no perder ese histórico cuando el proveedor lo descarta, se agrega una base de datos propia y pequeña, exclusiva de `ai-monitor`.
+
+- **Ubicación**: `~/.local/share/ai-monitor/history.db` (SQLite, stdlib — mismo criterio XDG que ya usa OpenCode en `~/.local/share/opencode/`). Ruta resuelta con `os.path.expanduser`, nunca hardcodeada, igual que el resto del proyecto.
+- **Módulo nuevo**: `history.py`, con una única función pública `record_snapshot(sources: dict) -> None`. No es un collector (no expone `collect()`), es la capa de persistencia.
+- **Schema** (dos tablas, reflejando la misma división que ya existe entre collectors "por proyecto" y OpenRouter "por modelo"):
+  ```sql
+  CREATE TABLE IF NOT EXISTS daily_project (
+      date TEXT NOT NULL, source TEXT NOT NULL, project TEXT NOT NULL,
+      tokens INTEGER NOT NULL, cost REAL,
+      PRIMARY KEY (date, source, project)
+  );
+  CREATE TABLE IF NOT EXISTS daily_model (
+      date TEXT NOT NULL, model TEXT NOT NULL,
+      tokens INTEGER NOT NULL, cost REAL,
+      PRIMARY KEY (date, model)
+  );
+  ```
+- **Fuente de los rollups diarios**: el campo `by_day` que cada collector ya expone (extensión descrita en la sección de Frontend más arriba — los 4 collectors lo agregan). `record_snapshot()` recorre `sources[fuente][proyecto]["by_day"]` (o `sources["openrouter"]["by_day"]` por modelo) y hace `INSERT OR REPLACE` por cada `(fecha, fuente, proyecto)` / `(fecha, modelo)` presente en el snapshot actual.
+- **Mecanismo clave — por qué `REPLACE` y no `INSERT` acumulativo**: cada collector recalcula el total del día completo desde los datos crudos en cada corrida (no son deltas incrementales), así que `record_snapshot()` simplemente sobrescribe la fila de ese día con el valor recién calculado — mientras el proveedor todavía tenga esos datos, el rollup se mantiene actualizado y correcto. El valor real de la tabla aparece el día que el proveedor deja de retener una sesión vieja: como esa fecha ya no vuelve a aparecer en `by_day`, `record_snapshot()` simplemente no la toca, y la fila con el último total conocido queda intacta permanentemente. No hay lógica de "si no viene, borrar" — la ausencia es lo que preserva el histórico.
+- **Quién la invoca**: `record_snapshot()` se llama desde un solo punto compartido — dentro de `collect_all()` en `main.py`, inmediatamente después de recolectar — así que se persiste tanto si corre `main.py` (CLI, timer de systemd) como si corre `server.py` (que importa `collect_all()`). No hay dos rutas de invocación separadas que puedan desincronizarse.
+- **Consumo**: se agrega `GET /api/history?days=N` en `server.py` (default `N=90`), que lee directo de `history.db` y devuelve series por día — separado de `/api/usage`, que sigue siendo el snapshot en vivo. El frontend usa `/api/history` para el gráfico de tendencia (en vez de derivarlo de `by_day` en memoria, que solo cubre la ventana de retención del proveedor) y `/api/usage`/SSE para las cifras actuales.
+- **Sin dependencias nuevas**: `sqlite3` es stdlib, igual que en `codex.py`/`opencode.py` — no cambia la promesa de "backend sin dependencias".
+
 ## Systemd
 
 - **`systemd/ai-monitor.timer`** (existente): sin cambios, sigue regenerando el HTML estático opcionalmente.
@@ -43,5 +68,6 @@ El backend Python mantiene la regla existente del proyecto ("cero dependencias, 
 ## Fuera de alcance (esta fase)
 
 - Autenticación/autorización sobre el dashboard servido (asume uso local, `localhost` — no se expone a red pública en este diseño; si el usuario quisiera exponerlo, es su responsabilidad poner un proxy/auth delante).
-- Persistencia histórica más allá de lo que cada collector ya puede derivar de sus archivos fuente actuales (no se agrega una base de datos propia de `ai-monitor` para guardar históricos más largos que lo que Claude Code/Codex/OpenCode retienen).
 - Empaquetado/distribución del frontend como binario único (sigue siendo "clona, `npm run build`, corre `server.py`").
+- Purga/retención configurable de `history.db` (crece indefinidamente por ahora — a razón de una fila por día/fuente/proyecto o día/modelo, el crecimiento es lineal y pequeño; no se justifica una política de purga en esta fase).
+- Exportar/backup de `history.db` (queda como cualquier archivo SQLite normal en `~/.local/share/ai-monitor/`, el usuario puede copiarlo si quiere).
