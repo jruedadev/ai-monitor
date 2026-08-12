@@ -4,6 +4,7 @@
 import os
 import sqlite3
 from collections import defaultdict
+from datetime import datetime, timezone
 
 
 def collect(db_path=None):
@@ -28,7 +29,9 @@ def collect(db_path=None):
 
     projects = defaultdict(lambda: {
         "input": 0, "output": 0, "cache_read": 0, "cache_write": 0,
-        "cost": 0.0, "messages": 0, "session_count": 0, "sessions_detail": [],
+        "cost": 0.0, "messages": 0, "session_count": 0,
+        "by_day": defaultdict(lambda: {"tokens": 0, "cost": 0.0}),
+        "sessions_detail": [],
     })
 
     for row in rows:
@@ -48,6 +51,13 @@ def collect(db_path=None):
             p["cost"] += cost
             p["messages"] += 1
             p["session_count"] += 1
+
+            time_created = row["time_created"]
+            if time_created is not None:
+                day = datetime.fromtimestamp(time_created / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+                p["by_day"][day]["tokens"] += inp + out + cr + cw
+                p["by_day"][day]["cost"] += cost
+
             p["sessions_detail"].append({
                 "session_id": row["id"],
                 "tokens": inp + out + cr + cw,
@@ -56,8 +66,9 @@ def collect(db_path=None):
                 "last_ts": row["time_created"],
                 "cwd": directory,
             })
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError, OSError):
             # Skip rows with unexpected data types or missing fields
+            # OSError can occur when datetime.fromtimestamp() receives out-of-range timestamps
             continue
 
     out = {}
@@ -69,6 +80,7 @@ def collect(db_path=None):
             "cost": round(p["cost"], 4),
             "messages": p["messages"],
             "session_count": p["session_count"],
+            "by_day": {k: {"tokens": v["tokens"], "cost": round(v["cost"], 4)} for k, v in p["by_day"].items()},
             "sessions_detail": p["sessions_detail"],
         }
     return out

@@ -51,6 +51,28 @@ class TestOpenCodeCollector(unittest.TestCase):
         data = opencode.collect(db_path="/nonexistent/opencode.db")
         self.assertEqual(data, {})
 
+    def test_by_day_derives_date_from_time_created_ms(self):
+        con = sqlite3.connect(self.tmp.name)
+        con.execute(
+            "INSERT INTO session (id, directory, model, title, cost, tokens_input, "
+            "tokens_output, tokens_cache_read, tokens_cache_write, time_created) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            ("s2", "/home/user/DEV/demo", '{"id":"gpt-5.5"}', "Segunda", 0.10,
+             300, 50, 0, 0, 1777996210131),  # == 2026-05-05T15:50:10Z
+        )
+        con.commit()
+        con.close()
+
+        data = opencode.collect(db_path=self.tmp.name)
+
+        by_day = data["/home/user/DEV/demo"]["by_day"]
+        self.assertIn("2026-05-05", by_day)
+        # setUp inserts s1: 1000+200+500+100=1800 tokens, cost 0.22
+        # test inserts s2: 300+50+0+0=350 tokens, cost 0.10
+        # both on same day, so total should be 2150 tokens and 0.32 cost
+        self.assertEqual(by_day["2026-05-05"]["tokens"], 2150)
+        self.assertAlmostEqual(by_day["2026-05-05"]["cost"], 0.32, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()
