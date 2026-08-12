@@ -23,13 +23,39 @@ python3 main.py --html out.html     # dashboard HTML con pestañas por fuente
 
 ## OpenRouter
 
-Genera una API key en https://openrouter.ai/keys y expórtala:
+Genera una **management key** en https://openrouter.ai/keys y expórtala:
 
 ```bash
 export OPENROUTER_API_KEY="sk-or-..."
 ```
 
-Sin esta variable, la pestaña de OpenRouter muestra un aviso en vez de datos; el resto del dashboard no se ve afectado.
+> **Importante:** debe ser una **management key** de la cuenta, no una key normal de uso. OpenRouter solo permite consultar el historial de actividad (`/api/v1/activity`) con management keys; una key de tipo normal autentica correctamente pero responde `403 "Only management keys can fetch activity for an account"`, y una key revocada responde `401 "User not found"`.
+
+El collector busca la key en este orden:
+1. Variable de entorno `OPENROUTER_API_KEY`.
+2. Archivo `~/.config/ai-monitor/env` (generado por `install.sh` con permisos `600`, el mismo que usa la unidad de systemd).
+
+Así funciona tanto en la terminal como en el timer de systemd, sin hardcodear la key en el código. Sin esta variable/archivo, la pestaña de OpenRouter muestra un aviso en vez de datos; el resto del dashboard no se ve afectado.
+
+**Si persistes la key en `~/.bashrc`**, pon el `export` **antes** del bloque `case $- in ... esac` (el chequeo de shell interactivo), para que también la vean las shells no-interactivas. Y recuerda: `install.sh` copia la variable al `.env` en el momento de ejecutarlo — si revocas o regeneras la key, actualiza el `export` **y** vuelve a correr `./install.sh`.
+
+### Flujo completo para un usuario nuevo
+
+```bash
+# 1. Genera la management key en https://openrouter.ai/keys
+# 2. Exporta y persiste la key (antes del chequeo de interactividad del ~/.bashrc)
+echo 'export OPENROUTER_API_KEY="sk-or-..."' >> ~/.bashrc
+source ~/.bashrc
+
+# 3. Instala: copia la key al .env (chmod 600) y genera las unidades systemd
+./install.sh
+
+# 4. Activa el timer
+systemctl --user daemon-reload
+systemctl --user enable --now ai-monitor.timer
+```
+
+Resultado: la terminal interactiva lee la key de `~/.bashrc`; el timer de systemd (no-interactivo) la lee de `~/.config/ai-monitor/env` vía `EnvironmentFile`. Si más adelante regeneras la key, repite los pasos 2 y 3.
 
 ## Instalación (alias + actualización automática)
 

@@ -3,4 +3,5 @@ Description=ai-monitor: regenerar dashboard de uso de IA
 
 [Service]
 Type=oneshot
+EnvironmentFile=__ENV_FILE__
 ExecStart=__PYTHON__ __REPO_DIR__/main.py --html %h/claude-usage.html

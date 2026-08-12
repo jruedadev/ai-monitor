@@ -1,3 +1,5 @@
+import os
+import tempfile
 import unittest
 
 from collectors import openrouter
@@ -5,7 +7,10 @@ from collectors import openrouter
 
 class TestOpenRouterCollector(unittest.TestCase):
     def test_missing_api_key_marks_unavailable(self):
-        data = openrouter.collect(api_key=None, fetch=lambda url, key: {})
+        data = openrouter.collect(
+            api_key=None, fetch=lambda url, key: {},
+            env_file_path="/nonexistent/ai-monitor/env",
+        )
         self.assertTrue(data["unavailable"])
         self.assertIn("OPENROUTER_API_KEY", data["reason"])
 
@@ -38,6 +43,24 @@ class TestOpenRouterCollector(unittest.TestCase):
         data_none = openrouter.collect(api_key="fake-key", fetch=lambda url, key: None)
         self.assertTrue(data_none["unavailable"])
         self.assertIn("reason", data_none)
+
+    def test_falls_back_to_env_file_when_env_var_missing(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
+            f.write('OPENROUTER_API_KEY="sk-or-from-env-file"\n')
+            env_file_path = f.name
+        try:
+            seen_keys = []
+
+            def fetch(url, key):
+                seen_keys.append(key)
+                return {"data": []}
+
+            data = openrouter.collect(api_key=None, fetch=fetch, env_file_path=env_file_path)
+
+            self.assertFalse(data["unavailable"])
+            self.assertEqual(seen_keys, ["sk-or-from-env-file"])
+        finally:
+            os.unlink(env_file_path)
 
     def test_fetch_error_marks_unavailable_with_reason(self):
         def failing_fetch(url, key):

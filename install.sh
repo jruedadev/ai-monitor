@@ -6,15 +6,28 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 PYTHON_BIN="$(command -v python3)"
 UNITS_DIR="$HOME/.config/systemd/user"
+ENV_DIR="$HOME/.config/ai-monitor"
+ENV_FILE="$ENV_DIR/env"
 
-mkdir -p "$UNITS_DIR"
+mkdir -p "$UNITS_DIR" "$ENV_DIR"
 
 sed \
   -e "s#__REPO_DIR__#${REPO_DIR}#g" \
   -e "s#__PYTHON__#${PYTHON_BIN}#g" \
+  -e "s#__ENV_FILE__#${ENV_FILE}#g" \
   "$REPO_DIR/systemd/ai-monitor.service.template" > "$UNITS_DIR/ai-monitor.service"
 
 cp "$REPO_DIR/systemd/ai-monitor.timer" "$UNITS_DIR/ai-monitor.timer"
+
+# Archivo de entorno con la key de OpenRouter (management key), con permisos
+# restringidos. systemd lo lee vía EnvironmentFile y el collector como fallback.
+umask 077
+if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+  printf 'OPENROUTER_API_KEY=%s\n' "$OPENROUTER_API_KEY" > "$ENV_FILE"
+else
+  : > "$ENV_FILE"
+fi
+chmod 600 "$ENV_FILE"
 
 echo "Unidades instaladas en $UNITS_DIR"
 echo ""
