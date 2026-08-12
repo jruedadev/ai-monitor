@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 from collectors import claude_code, codex, opencode, openrouter
 from dashboard import template
+import history
 
 
 def combine_projects(claude_data, codex_data, opencode_data):
@@ -31,13 +32,15 @@ def combine_projects(claude_data, codex_data, opencode_data):
     return {k: {**v, "cost": round(v["cost"], 4)} for k, v in combined.items()}
 
 
-def collect_all():
-    return {
+def collect_all(db_path=None):
+    sources = {
         "claude_code": claude_code.collect(),
         "codex": codex.collect(),
         "opencode": opencode.collect(),
         "openrouter": openrouter.collect(),
     }
+    history.record_snapshot(sources, db_path=db_path)
+    return sources
 
 
 def print_table(sources, combined):
