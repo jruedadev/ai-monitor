@@ -59,6 +59,27 @@ class TestCodexCollector(unittest.TestCase):
         self.assertIn("2025-08-01", by_day)
         self.assertEqual(by_day["2025-08-01"]["tokens"], 1_000_000)
 
+    def test_by_day_skips_null_created_at_but_counts_in_totals(self):
+        con = sqlite3.connect(self.tmp.name)
+        con.execute(
+            "INSERT INTO threads (id, cwd, model, tokens_used, created_at, title) VALUES (?,?,?,?,?,?)",
+            ("t3", "/home/user/DEV/demo", "gpt-5.5", 500_000, None, "Sin fecha"),
+        )
+        con.commit()
+        con.close()
+
+        data = codex.collect(state_db_path=self.tmp.name)
+
+        proj = data["/home/user/DEV/demo"]
+        # Total debe incluir la fila sin created_at
+        self.assertEqual(proj["total_tokens"], 26392 + 500_000)
+        self.assertEqual(proj["session_count"], 2)
+        # by_day no debe incluir entrada para la fila sin fecha
+        by_day = proj["by_day"]
+        # Debe haber al menos la entrada del test original (si hay), pero NO debe haber una entrada sin fecha
+        self.assertNotIn("None", by_day)
+        self.assertNotIn("null", by_day)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -51,7 +51,7 @@ def collect(state_db_path=None):
             p["session_count"] += 1
 
             created_at = row["created_at"]
-            if created_at:
+            if created_at is not None:
                 day = datetime.fromtimestamp(created_at, tz=timezone.utc).strftime("%Y-%m-%d")
                 p["by_day"][day]["tokens"] += tokens_used
                 p["by_day"][day]["cost"] += cost
@@ -64,8 +64,9 @@ def collect(state_db_path=None):
                 "last_ts": row["created_at"],
                 "cwd": cwd,
             })
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError, OSError):
             # Skip rows with unexpected data types or missing fields
+            # OSError can occur when datetime.fromtimestamp() receives out-of-range timestamps
             continue
 
     out = {}
