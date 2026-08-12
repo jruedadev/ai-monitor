@@ -19,6 +19,7 @@ def collect(projects_dir=None):
     projects = defaultdict(lambda: {
         "input": 0, "output": 0, "cache_read": 0, "cache_write": 0,
         "cost": 0.0, "cost_incomplete": False, "messages": 0, "sessions": set(),
+        "by_day": defaultdict(lambda: {"tokens": 0, "cost": 0.0}),
         "sessions_detail": defaultdict(lambda: {
             "tokens": 0, "cost": 0.0, "title": None, "last_ts": None, "cwd": None
         }),
@@ -91,6 +92,11 @@ def collect(projects_dir=None):
                 p["messages"] += 1
                 p["sessions"].add(session_id)
 
+                if ts:
+                    day = ts[:10]
+                    p["by_day"][day]["tokens"] += inp + out + cr + cw
+                    p["by_day"][day]["cost"] += c
+
                 sd = p["sessions_detail"][session_id]
                 sd["tokens"] += inp + out + cr + cw
                 sd["cost"] += c
@@ -108,6 +114,7 @@ def collect(projects_dir=None):
             "cost_incomplete": p["cost_incomplete"],
             "messages": p["messages"],
             "session_count": len(p["sessions"]),
+            "by_day": {k: {"tokens": v["tokens"], "cost": round(v["cost"], 4)} for k, v in p["by_day"].items()},
             "sessions_detail": [
                 {"session_id": sid, "tokens": v["tokens"], "cost": round(v["cost"], 4),
                  "title": v["title"], "last_ts": v["last_ts"], "cwd": v["cwd"]}

@@ -60,6 +60,40 @@ class TestClaudeCodeCollector(unittest.TestCase):
         data = claude_code.collect(projects_dir=self.tmp)
         self.assertEqual(data, {})
 
+    def test_by_day_aggregates_tokens_and_cost_per_date(self):
+        self._write_session("sess1.jsonl", [
+            {
+                "type": "assistant", "cwd": "/home/user/DEV/demo",
+                "timestamp": "2026-08-01T10:00:00Z",
+                "message": {
+                    "model": "claude-sonnet-5",
+                    "usage": {
+                        "input_tokens": 1_000_000, "output_tokens": 0,
+                        "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+                    },
+                },
+            },
+            {
+                "type": "assistant", "cwd": "/home/user/DEV/demo",
+                "timestamp": "2026-08-02T09:00:00Z",
+                "message": {
+                    "model": "claude-sonnet-5",
+                    "usage": {
+                        "input_tokens": 500_000, "output_tokens": 0,
+                        "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+                    },
+                },
+            },
+        ])
+
+        data = claude_code.collect(projects_dir=self.tmp)
+
+        by_day = data["/home/user/DEV/demo"]["by_day"]
+        self.assertEqual(by_day["2026-08-01"]["tokens"], 1_000_000)
+        self.assertAlmostEqual(by_day["2026-08-01"]["cost"], 3.0)
+        self.assertEqual(by_day["2026-08-02"]["tokens"], 500_000)
+        self.assertAlmostEqual(by_day["2026-08-02"]["cost"], 1.5)
+
 
 if __name__ == "__main__":
     unittest.main()
