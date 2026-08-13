@@ -29,6 +29,29 @@ else
 fi
 chmod 600 "$ENV_FILE"
 
+echo ""
+read -r -p "¿Instalar también el servicio del dashboard interactivo (server.py)? [y/N] " REPLY
+if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+  if [ ! -d "$REPO_DIR/frontend/dist" ]; then
+    echo ""
+    echo "ADVERTENCIA: no se encontró $REPO_DIR/frontend/dist"
+    echo "El frontend no está compilado. Antes de activar el servicio, corre:"
+    echo "  cd $REPO_DIR/frontend && npm install && npm run build"
+    echo ""
+  fi
+
+  sed \
+    -e "s#__REPO_DIR__#${REPO_DIR}#g" \
+    -e "s#__PYTHON__#${PYTHON_BIN}#g" \
+    -e "s#__ENV_FILE__#${ENV_FILE}#g" \
+    "$REPO_DIR/systemd/ai-monitor-server.service.template" > "$UNITS_DIR/ai-monitor-server.service"
+
+  echo "Unidad ai-monitor-server.service instalada en $UNITS_DIR"
+  echo "Para activarla:"
+  echo "  systemctl --user daemon-reload"
+  echo "  systemctl --user enable --now ai-monitor-server.service"
+fi
+
 echo "Unidades instaladas en $UNITS_DIR"
 echo ""
 echo "Para activarlas, corre:"
