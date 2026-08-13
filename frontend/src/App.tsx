@@ -3,6 +3,8 @@ import { useUsageStream } from "@/hooks/useUsageStream";
 import { Sidebar, type SectionKey } from "@/components/Sidebar";
 import { KpiCards } from "@/components/KpiCards";
 import { ProjectTable } from "@/components/ProjectTable";
+import { TrendChart } from "@/components/TrendChart";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function App() {
   const [section, setSection] = useState<SectionKey>("all");
@@ -26,10 +28,14 @@ export default function App() {
       <main className="flex-1 p-6 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">ai-monitor</h1>
-          <span className={`text-xs ${connected ? "text-green-500" : "text-muted-foreground"}`}>
-            {connected ? "● en vivo" : "○ conectando..."}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className={`text-xs ${connected ? "text-green-500" : "text-muted-foreground"}`}>
+              {connected ? "● en vivo" : "○ conectando..."}
+            </span>
+            <ThemeToggle />
+          </div>
         </div>
+        <TrendChart />
         {combined && <KpiCards projects={projectsForSection()} />}
         {combined && <ProjectTable projects={projectsForSection()} />}
       </main>
