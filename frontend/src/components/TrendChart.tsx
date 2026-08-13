@@ -15,7 +15,8 @@ export function TrendChart() {
   useEffect(() => {
     fetch("/api/history?days=90")
       .then((r) => r.json())
-      .then((data) => setRows(data.daily_project));
+      .then((data) => setRows(data.daily_project))
+      .catch((err) => console.error("Error al cargar /api/history:", err));
   }, []);
 
   const byDate: Record<string, number> = {};

@@ -35,11 +35,11 @@ def _recompute_and_maybe_publish(broker):
 
 def _background_loop(broker, poll_interval_seconds):
     while True:
+        time.sleep(poll_interval_seconds)
         try:
             _recompute_and_maybe_publish(broker)
         except Exception:
             pass  # una falla de recolección no debe tumbar el hilo de fondo
-        time.sleep(poll_interval_seconds)
 
 
 def _current_snapshot_json():
@@ -47,7 +47,7 @@ def _current_snapshot_json():
         return json.dumps({"sources": _state["sources"], "combined": _state["combined"]})
 
 
-def make_handler(static_dir, broker):
+def make_handler(static_dir, broker, db_path=None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
             pass  # silencioso; evita ruido en stdout durante uso normal
@@ -65,7 +65,7 @@ def make_handler(static_dir, broker):
                         days = 90
                 except ValueError:
                     days = 90
-                self._send_json(json.dumps(history.query_history(days=days)))
+                self._send_json(json.dumps(history.query_history(days=days, db_path=db_path)))
             elif parsed.path == "/api/stream":
                 self._handle_sse()
             else:
@@ -107,8 +107,9 @@ def make_handler(static_dir, broker):
                 return
 
             rel_path = url_path.lstrip("/") or "index.html"
-            candidate = os.path.normpath(os.path.join(static_dir, rel_path))
-            if not candidate.startswith(os.path.abspath(static_dir)):
+            root = os.path.abspath(static_dir)
+            candidate = os.path.normpath(os.path.join(root, rel_path))
+            if candidate != root and not candidate.startswith(root + os.sep):
                 candidate = os.path.join(static_dir, "index.html")
             if not os.path.isfile(candidate):
                 candidate = os.path.join(static_dir, "index.html")
@@ -130,18 +131,23 @@ def make_handler(static_dir, broker):
     return Handler
 
 
-def build_app(static_dir, poll_interval_seconds=60, port=0):
+def build_app(static_dir, poll_interval_seconds=60, port=0, db_path=None):
+    static_dir = os.path.abspath(static_dir)
     broker = SSEBroker()
-    handler_cls = make_handler(static_dir, broker)
+    handler_cls = make_handler(static_dir, broker, db_path=db_path)
     httpd = ThreadingHTTPServer(("127.0.0.1", port), handler_cls)
+
+    # Primer ciclo inmediato y síncrono para que /api/usage no responda vacío
+    # justo después de arrancar. Se corre ANTES de lanzar el hilo de fondo para
+    # que no compitan por la primera recolección (doble trabajo, doble escritura
+    # concurrente a SQLite vía history.record_snapshot(), orden de publish no
+    # garantizado en SSE).
+    _recompute_and_maybe_publish(broker)
 
     thread = threading.Thread(
         target=_background_loop, args=(broker, poll_interval_seconds), daemon=True
     )
     thread.start()
-    # Primer ciclo inmediato y síncrono para que /api/usage no responda vacío
-    # justo después de arrancar.
-    _recompute_and_maybe_publish(broker)
 
     return httpd
 

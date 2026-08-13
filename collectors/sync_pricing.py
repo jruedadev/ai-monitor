@@ -11,17 +11,10 @@ import sqlite3
 import sys
 
 import history
+from collectors.pricing import _DEFAULT_SNAPSHOT as SNAPSHOT
 
-# Editar aquí cuando un proveedor cambie precios, luego correr --write.
-SNAPSHOT = {
-    "claude-opus-5":             {"input": 15.0, "output": 75.0, "cache_read": 1.5, "cache_write": 18.75},
-    "claude-sonnet-5":           {"input": 3.0,  "output": 15.0, "cache_read": 0.3, "cache_write": 3.75},
-    "claude-haiku-4-5-20251001": {"input": 1.0,  "output": 5.0,  "cache_read": 0.1, "cache_write": 1.25},
-    "claude-fable-5":            {"input": 3.0,  "output": 15.0, "cache_read": 0.3, "cache_write": 3.75},
-    "gpt-5.5":                   {"input": 2.5,  "output": 10.0, "cache_read": 0.25, "cache_write": 2.5},
-    "gpt-5.5-fast":              {"input": 2.5,  "output": 10.0, "cache_read": 0.25, "cache_write": 2.5},
-    "gpt-5.5-mini":              {"input": 0.5,  "output": 2.0,  "cache_read": 0.05, "cache_write": 0.5},
-}
+# Editar el snapshot de bootstrap en collectors/pricing.py (_DEFAULT_SNAPSHOT)
+# cuando un proveedor cambie precios, luego correr --write.
 
 
 def _current_rows(db_path):
@@ -64,6 +57,9 @@ def write(db_path=None):
         )
     con.commit()
     con.close()
+
+    from collectors import pricing
+    pricing.reset_cache()
 
 
 def check(db_path=None):

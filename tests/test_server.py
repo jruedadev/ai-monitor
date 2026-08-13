@@ -29,7 +29,12 @@ class TestServerAPI(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-        self.httpd = server.build_app(self.static_dir, poll_interval_seconds=3600)
+        db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
+        os.close(db_fd)
+        os.unlink(self.db_path)
+        self.addCleanup(lambda: os.path.exists(self.db_path) and os.unlink(self.db_path))
+
+        self.httpd = server.build_app(self.static_dir, poll_interval_seconds=3600, db_path=self.db_path)
         self.port = self.httpd.server_address[1]
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()

@@ -13,7 +13,7 @@ export interface SourceProjectUsage {
   cache_write: number;
   total_tokens: number;
   cost: number;
-  cost_incomplete: boolean;
+  cost_incomplete?: boolean;
   messages: number;
   session_count: number;
   by_day: Record<string, { tokens: number; cost: number }>;

@@ -106,7 +106,7 @@ El puerto es configurable con `AI_MONITOR_PORT` (default `8420`). El servidor re
 
 ## Sobre el costo estimado
 
-- Claude Code y Codex: costo **estimado** con una tabla de precios de lista por modelo (`collectors/pricing.py`). Si el modelo no está mapeado, el costo de esa sesión no se estima (no se usa un precio por defecto que podría ser incorrecto).
+- Claude Code y Codex: costo **estimado** con una tabla de precios de lista por modelo. Si el modelo no está mapeado, el costo de esa sesión no se estima (no se usa un precio por defecto que podría ser incorrecto).
 - Codex no expone un desglose de tokens por input/output/cache — solo un total `tokens_used` por hilo. Por eso el costo de Codex se estima tratando ese total como si fueran todos tokens de input; es una aproximación que puede sobre o subestimar el costo real según la mezcla real de tokens de cada sesión.
 - OpenCode: usa el costo que **OpenCode ya calculó** para cada sesión — no se re-estima.
 - OpenRouter: costo real reportado por su API.
@@ -115,12 +115,27 @@ Ninguno de estos números refleja lo que realmente pagas si usas un plan de susc
 
 **Nota sobre OpenCode + OpenRouter**: cuando OpenCode enruta un modelo a través de OpenRouter, ese consumo puede aparecer en ambas pestañas. La vista "Todo" combinada solo suma Claude Code + Codex + OpenCode (nunca OpenRouter) para evitar doble conteo.
 
+### Tabla de precios (SQLite, no un dict hardcodeado)
+
+Los precios de lista usados para estimar el costo de Claude Code y Codex viven en la tabla `pricing` de `~/.local/share/ai-monitor/history.db` (SQLite), no en un dict de Python editable directamente. En el primer uso, si la tabla está vacía, se hace bootstrap automático desde un snapshot embebido en `collectors/pricing.py` (`_DEFAULT_SNAPSHOT`) — a partir de ahí la base de datos es la fuente de verdad, y `collectors/pricing.py` solo lee de ahí (con cache en memoria por proceso).
+
+El único punto de escritura soportado es el CLI `collectors/sync_pricing.py`:
+
+```bash
+python3 -m collectors.sync_pricing             # dry-run: muestra qué modelos son nuevos o cambiaron de precio
+python3 -m collectors.sync_pricing --write      # aplica el snapshot a la tabla pricing
+python3 -m collectors.sync_pricing --check      # exit 1 si la tabla difiere del snapshot (para CI)
+```
+
+Para actualizar precios: edita `_DEFAULT_SNAPSHOT` en `collectors/pricing.py` y corre `--write`. No edites la tabla `pricing` a mano.
+
 ## Arquitectura
 
 ```
 main.py                # CLI: --json / --html / tabla por defecto
 collectors/
-  pricing.py            # tabla de precios compartida
+  pricing.py            # lee/cachea la tabla pricing de history.db (bootstrap desde snapshot embebido)
+  sync_pricing.py        # único CLI que escribe en la tabla pricing (dry-run / --write / --check)
   claude_code.py         # ~/.claude/projects/*.jsonl
   codex.py                # ~/.codex/state_5.sqlite
   opencode.py              # ~/.local/share/opencode/opencode.db

@@ -9,7 +9,7 @@ from collections import defaultdict
 from collectors.pricing import cost_of
 
 
-def collect(projects_dir=None):
+def collect(projects_dir=None, db_path=None):
     if projects_dir is None:
         projects_dir = os.path.expanduser("~/.claude/projects")
 
@@ -78,7 +78,7 @@ def collect(projects_dir=None):
                 out = usage.get("output_tokens", 0) or 0
                 cr = usage.get("cache_read_input_tokens", 0) or 0
                 cw = usage.get("cache_creation_input_tokens", 0) or 0
-                raw_cost = cost_of(inp, out, cr, cw, model)
+                raw_cost = cost_of(inp, out, cr, cw, model, db_path=db_path)
                 c = raw_cost or 0.0
 
                 p = projects[resolved_name]

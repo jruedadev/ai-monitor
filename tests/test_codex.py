@@ -3,7 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 
-from collectors import codex
+from collectors import codex, pricing
 
 
 SCHEMA = """
@@ -27,11 +27,19 @@ class TestCodexCollector(unittest.TestCase):
         con.commit()
         con.close()
 
+        db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
+        os.close(db_fd)
+        os.unlink(self.db_path)
+        pricing.reset_cache()
+
     def tearDown(self):
         os.unlink(self.tmp.name)
+        if os.path.exists(self.db_path):
+            os.unlink(self.db_path)
+        pricing.reset_cache()
 
     def test_collects_thread_into_project(self):
-        data = codex.collect(state_db_path=self.tmp.name)
+        data = codex.collect(state_db_path=self.tmp.name, db_path=self.db_path)
 
         self.assertIn("/home/user/DEV/demo", data)
         proj = data["/home/user/DEV/demo"]
@@ -41,7 +49,7 @@ class TestCodexCollector(unittest.TestCase):
         self.assertGreater(proj["cost"], 0)
 
     def test_missing_db_file_returns_empty_dict(self):
-        data = codex.collect(state_db_path="/nonexistent/path/state_5.sqlite")
+        data = codex.collect(state_db_path="/nonexistent/path/state_5.sqlite", db_path=self.db_path)
         self.assertEqual(data, {})
 
     def test_by_day_derives_date_from_created_at_epoch(self):
@@ -53,7 +61,7 @@ class TestCodexCollector(unittest.TestCase):
         con.commit()
         con.close()
 
-        data = codex.collect(state_db_path=self.tmp.name)
+        data = codex.collect(state_db_path=self.tmp.name, db_path=self.db_path)
 
         by_day = data["/home/user/DEV/demo"]["by_day"]
         self.assertIn("2025-08-01", by_day)
@@ -68,7 +76,7 @@ class TestCodexCollector(unittest.TestCase):
         con.commit()
         con.close()
 
-        data = codex.collect(state_db_path=self.tmp.name)
+        data = codex.collect(state_db_path=self.tmp.name, db_path=self.db_path)
 
         proj = data["/home/user/DEV/demo"]
         # Total debe incluir la fila sin created_at

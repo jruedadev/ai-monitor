@@ -26,10 +26,28 @@ _DEFAULT_SNAPSHOT = {
 }
 DEFAULT_PRICE = None  # sin default silencioso: modelo desconocido -> costo None
 
+# Cache en memoria de la tabla pricing, por db_path. cost_of() se llama una vez
+# por mensaje en el loop de recolección (claude_code.py/codex.py), así que abrir
+# una conexión SQLite nueva por llamada es una regresión de performance medible
+# (~1.7s de 2.3s totales sobre 12,405 mensajes). El cache solo se invalida
+# explícitamente vía reset_cache() (p.ej. entre corridas de test).
+_PRICING_CACHE = {}
+
+
+def reset_cache():
+    """Limpia el cache de pricing en memoria. Usar en tests para aislar estado
+    entre corridas; un proceso de servidor de larga duración recarga solo al
+    reiniciar, que es el comportamiento esperado."""
+    _PRICING_CACHE.clear()
+
 
 def _load_pricing(db_path):
     if db_path is None:
         db_path = history.DB_PATH_DEFAULT
+
+    if db_path in _PRICING_CACHE:
+        return _PRICING_CACHE[db_path]
+
     history.ensure_schema(db_path)
 
     con = sqlite3.connect(db_path)
@@ -53,6 +71,7 @@ def _load_pricing(db_path):
         for row in cur.fetchall()
     }
     con.close()
+    _PRICING_CACHE[db_path] = result
     return result
 
 

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from collectors.pricing import cost_of
 
 
-def collect(state_db_path=None):
+def collect(state_db_path=None, db_path=None):
     if state_db_path is None:
         state_db_path = os.path.expanduser("~/.codex/state_5.sqlite")
 
@@ -39,7 +39,7 @@ def collect(state_db_path=None):
             # No hay desglose input/output en Codex: se trata todo como "input"
             # para que el total_tokens sea correcto; el costo usa el mismo total
             # como input puro (aproximación documentada en el README).
-            raw_cost = cost_of(tokens_used, 0, 0, 0, model)
+            raw_cost = cost_of(tokens_used, 0, 0, 0, model, db_path=db_path)
             cost = raw_cost or 0.0
 
             p = projects[cwd]
