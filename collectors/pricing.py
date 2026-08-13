@@ -1,37 +1,78 @@
 """Tabla de precios de lista (USD por millón de tokens) y cálculo de costo.
 Compartida por los collectors que estiman costo (claude_code, codex).
 OpenCode no usa este módulo porque ya reporta su propio costo calculado.
-"""
 
-PRICING = {
-    "claude-opus-5":             {"in": 15.0, "out": 75.0, "cache_r": 1.5, "cache_w": 18.75},
-    "claude-sonnet-5":           {"in": 3.0,  "out": 15.0, "cache_r": 0.3, "cache_w": 3.75},
-    "claude-haiku-4-5-20251001": {"in": 1.0,  "out": 5.0,  "cache_r": 0.1, "cache_w": 1.25},
-    "claude-fable-5":            {"in": 3.0,  "out": 15.0, "cache_r": 0.3, "cache_w": 3.75},
+Los precios viven en la tabla `pricing` de history.db (ver history.py's
+_SCHEMA, Task 13). `_DEFAULT_SNAPSHOT` es solo el snapshot de bootstrap:
+si la tabla está vacía en el primer uso, se inserta este snapshot y a
+partir de ahí la base de datos es la fuente de verdad. Para actualizar
+precios en producción, usar `collectors/sync_pricing.py`, no editar este
+dict (salvo para cambiar el propio valor de bootstrap).
+"""
+import datetime
+import sqlite3
+
+import history
+
+_DEFAULT_SNAPSHOT = {
+    "claude-opus-5":             {"input": 15.0, "output": 75.0, "cache_read": 1.5, "cache_write": 18.75},
+    "claude-sonnet-5":           {"input": 3.0,  "output": 15.0, "cache_read": 0.3, "cache_write": 3.75},
+    "claude-haiku-4-5-20251001": {"input": 1.0,  "output": 5.0,  "cache_read": 0.1, "cache_write": 1.25},
+    "claude-fable-5":            {"input": 3.0,  "output": 15.0, "cache_read": 0.3, "cache_write": 3.75},
     # Modelos OpenAI vistos en Codex (precios de lista aproximados, ajustar si cambian)
-    "gpt-5.5":                   {"in": 2.5,  "out": 10.0, "cache_r": 0.25, "cache_w": 2.5},
-    "gpt-5.5-fast":              {"in": 2.5,  "out": 10.0, "cache_r": 0.25, "cache_w": 2.5},
-    "gpt-5.5-mini":              {"in": 0.5,  "out": 2.0,  "cache_r": 0.05, "cache_w": 0.5},
+    "gpt-5.5":                   {"input": 2.5,  "output": 10.0, "cache_read": 0.25, "cache_write": 2.5},
+    "gpt-5.5-fast":              {"input": 2.5,  "output": 10.0, "cache_read": 0.25, "cache_write": 2.5},
+    "gpt-5.5-mini":              {"input": 0.5,  "output": 2.0,  "cache_read": 0.05, "cache_write": 0.5},
 }
 DEFAULT_PRICE = None  # sin default silencioso: modelo desconocido -> costo None
 
 
-def price_for(model):
+def _load_pricing(db_path):
+    if db_path is None:
+        db_path = history.DB_PATH_DEFAULT
+    history.ensure_schema(db_path)
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) AS n FROM pricing")
+    if cur.fetchone()["n"] == 0:
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        for model, rates in _DEFAULT_SNAPSHOT.items():
+            cur.execute(
+                "INSERT OR REPLACE INTO pricing (model, input, output, cache_read, cache_write, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (model, rates["input"], rates["output"], rates["cache_read"], rates["cache_write"], now),
+            )
+        con.commit()
+
+    cur.execute("SELECT model, input, output, cache_read, cache_write FROM pricing")
+    result = {
+        row["model"]: {"input": row["input"], "output": row["output"],
+                        "cache_read": row["cache_read"], "cache_write": row["cache_write"]}
+        for row in cur.fetchall()
+    }
+    con.close()
+    return result
+
+
+def price_for(model, db_path=None):
     if not model:
         return None
-    for key, p in PRICING.items():
+    rates = _load_pricing(db_path)
+    for key, p in rates.items():
         if key in model:
             return p
     return None
 
 
-def cost_of(input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, model):
-    p = price_for(model)
+def cost_of(input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, model, db_path=None):
+    p = price_for(model, db_path=db_path)
     if p is None:
         return None
     return (
-        (input_tokens or 0) * p["in"]
-        + (output_tokens or 0) * p["out"]
-        + (cache_read_tokens or 0) * p["cache_r"]
-        + (cache_write_tokens or 0) * p["cache_w"]
+        (input_tokens or 0) * p["input"]
+        + (output_tokens or 0) * p["output"]
+        + (cache_read_tokens or 0) * p["cache_read"]
+        + (cache_write_tokens or 0) * p["cache_write"]
     ) / 1_000_000

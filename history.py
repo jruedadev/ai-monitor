@@ -18,6 +18,11 @@ CREATE TABLE IF NOT EXISTS daily_model (
     tokens INTEGER NOT NULL, cost REAL,
     PRIMARY KEY (date, model)
 );
+CREATE TABLE IF NOT EXISTS pricing (
+    model TEXT PRIMARY KEY,
+    input REAL, output REAL, cache_read REAL, cache_write REAL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
