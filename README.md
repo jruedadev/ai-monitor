@@ -78,6 +78,32 @@ Resultado: la terminal interactiva lee la key de `~/.bashrc`; el timer de system
 
    Detecta automáticamente dónde quedó el repo y genera una unidad `systemd --user` que regenera el HTML cada 15 minutos. El script imprime el comando final (`systemctl --user enable --now ai-monitor.timer`) sin ejecutarlo — lo corres tú cuando quieras activarlo.
 
+## Dashboard interactivo (opcional)
+
+Además del HTML estático y la tabla en terminal, hay un dashboard web en vivo (React + Server-Sent Events), servido por `server.py` — sin frameworks del lado del backend, solo `http.server` de la librería estándar.
+
+**Requiere Node.js/npm** (a diferencia del resto del proyecto, que solo necesita Python) para compilar el frontend.
+
+```bash
+# 1. Compilar el frontend una vez (o cada vez que cambie)
+cd frontend
+npm install
+npm run build
+cd ..
+
+# 2. Correr el servidor
+python3 server.py
+# abre http://127.0.0.1:8420
+```
+
+El puerto es configurable con `AI_MONITOR_PORT` (default `8420`). El servidor recolecta datos de las 4 fuentes cada 60 segundos y los empuja al navegador vía SSE — no hace falta recargar la página.
+
+**Como servicio de systemd**: `./install.sh` pregunta si quieres instalar también `ai-monitor-server.service` (servicio de larga duración, separado del `ai-monitor.timer` existente que solo regenera el HTML estático).
+
+### Histórico más allá de la retención de cada proveedor
+
+`server.py` (y también `main.py`, en cada ejecución) guarda un rollup diario por proyecto/modelo en `~/.local/share/ai-monitor/history.db` (SQLite). Si Claude Code, Codex u OpenCode eventualmente rotan o truncan sesiones viejas, ese histórico local no se pierde — el gráfico de tendencia del dashboard interactivo (`GET /api/history`) lee de ahí, no de los datos en vivo.
+
 ## Sobre el costo estimado
 
 - Claude Code y Codex: costo **estimado** con una tabla de precios de lista por modelo (`collectors/pricing.py`). Si el modelo no está mapeado, el costo de esa sesión no se estima (no se usa un precio por defecto que podría ser incorrecto).
