@@ -23,9 +23,21 @@ export function TrendChart() {
   for (const row of rows) {
     byDate[row.date] = (byDate[row.date] ?? 0) + row.tokens;
   }
-  const chartData = Object.entries(byDate)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, tokens]) => ({ date, Tokens: tokens }));
+
+  const dates = Object.keys(byDate).sort();
+  const chartData: { date: string; Tokens: number }[] = [];
+  if (dates.length > 0) {
+    const cursor = new Date(dates[0]);
+    const end = new Date(dates[dates.length - 1]);
+    while (cursor <= end) {
+      const date = cursor.toISOString().slice(0, 10);
+      chartData.push({ date, Tokens: byDate[date] ?? 0 });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  const formatTokens = (value: number) =>
+    new Intl.NumberFormat("es", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 
   return (
     <Card>
@@ -35,7 +47,10 @@ export function TrendChart() {
         index="date"
         categories={["Tokens"]}
         colors={["blue"]}
-        className="h-64 mt-4"
+        valueFormatter={formatTokens}
+        yAxisWidth={64}
+        showLegend={false}
+        className="ai-monitor-trendchart h-64 mt-4"
       />
     </Card>
   );
