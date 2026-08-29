@@ -9,7 +9,11 @@ interface DailyProjectRow {
   cost: number;
 }
 
-export function TrendChart() {
+interface TrendChartProps {
+  onSelectDate?: (date: string) => void;
+}
+
+export function TrendChart({ onSelectDate }: TrendChartProps) {
   const [rows, setRows] = useState<DailyProjectRow[]>([]);
 
   useEffect(() => {
@@ -50,7 +54,11 @@ export function TrendChart() {
         valueFormatter={formatTokens}
         yAxisWidth={64}
         showLegend={false}
-        className="ai-monitor-trendchart h-64 mt-4"
+        className="ai-monitor-trendchart h-64 mt-4 cursor-pointer"
+        onValueChange={(v) => {
+          const date = v?.date;
+          if (typeof date === "string" && onSelectDate) onSelectDate(date);
+        }}
       />
     </Card>
   );

@@ -6,6 +6,16 @@ export interface ProjectUsage {
   by_source: string[];
 }
 
+export interface SessionDetailEntry {
+  session_id: string;
+  tokens: number;
+  cost: number;
+  title: string | null;
+  last_ts: string | number | null;
+  cwd: string | null;
+  date: string | null;
+}
+
 export interface SourceProjectUsage {
   input: number;
   output: number;
@@ -17,7 +27,7 @@ export interface SourceProjectUsage {
   messages: number;
   session_count: number;
   by_day: Record<string, { tokens: number; cost: number }>;
-  sessions_detail: unknown[];
+  sessions_detail: SessionDetailEntry[];
 }
 
 export interface OpenRouterUsage {

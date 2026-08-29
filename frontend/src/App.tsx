@@ -4,11 +4,13 @@ import { Sidebar, type SectionKey } from "@/components/Sidebar";
 import { KpiCards } from "@/components/KpiCards";
 import { ProjectTable } from "@/components/ProjectTable";
 import { TrendChart } from "@/components/TrendChart";
+import { SessionDetail } from "@/components/SessionDetail";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { ProjectUsage } from "@/lib/api";
 
 export default function App() {
   const [section, setSection] = useState<SectionKey>("all");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const { sources, combined, connected } = useUsageStream();
 
   const projectsForSection = (): Record<string, ProjectUsage> => {
@@ -47,7 +49,7 @@ export default function App() {
             <ThemeToggle />
           </div>
         </div>
-        <TrendChart />
+        <TrendChart onSelectDate={setSelectedDate} />
         {openRouterUnavailable ? (
           <div className="rounded-md border p-6 text-sm text-muted-foreground">
             OpenRouter no disponible
@@ -58,6 +60,12 @@ export default function App() {
             <>
               <KpiCards projects={projectsForSection()} />
               <ProjectTable projects={projectsForSection()} />
+              <SessionDetail
+                sources={sources}
+                section={section}
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+              />
             </>
           )
         )}

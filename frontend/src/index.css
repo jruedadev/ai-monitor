@@ -219,14 +219,14 @@
   stroke-opacity: 0.95 !important;
 }
 
-.ai-monitor-trendchart .recharts-dot circle {
+.ai-monitor-trendchart circle.recharts-dot {
   fill: var(--tremor-brand-emphasis) !important;
   stroke: var(--tremor-background) !important;
   stroke-width: 2 !important;
   r: 3.5;
 }
 
-.ai-monitor-trendchart .recharts-active-dot circle {
+.ai-monitor-trendchart circle.recharts-active-dot {
   fill: var(--tremor-brand-emphasis) !important;
   stroke: var(--tremor-background) !important;
   stroke-width: 3 !important;

@@ -53,6 +53,7 @@ def collect(db_path=None):
             p["session_count"] += 1
 
             time_created = row["time_created"]
+            day = None
             if time_created is not None:
                 day = datetime.fromtimestamp(time_created / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
                 p["by_day"][day]["tokens"] += inp + out + cr + cw
@@ -65,6 +66,7 @@ def collect(db_path=None):
                 "title": row["title"],
                 "last_ts": row["time_created"],
                 "cwd": directory,
+                "date": day,
             })
         except (KeyError, TypeError, ValueError, OSError):
             # Skip rows with unexpected data types or missing fields

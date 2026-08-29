@@ -117,7 +117,8 @@ def collect(projects_dir=None, db_path=None):
             "by_day": {k: {"tokens": v["tokens"], "cost": round(v["cost"], 4)} for k, v in p["by_day"].items()},
             "sessions_detail": [
                 {"session_id": sid, "tokens": v["tokens"], "cost": round(v["cost"], 4),
-                 "title": v["title"], "last_ts": v["last_ts"], "cwd": v["cwd"]}
+                 "title": v["title"], "last_ts": v["last_ts"], "cwd": v["cwd"],
+                 "date": v["last_ts"][:10] if v["last_ts"] else None}
                 for sid, v in p["sessions_detail"].items()
             ],
         }
