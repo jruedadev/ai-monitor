@@ -58,24 +58,32 @@ export default function App() {
             <ThemeToggle />
           </div>
         </header>
-        <main className="flex-1 p-6 space-y-6 max-w-[1400px] w-full">
-          <TrendChart onSelectDate={setSelectedDate} />
+        <main key={section} className="flex-1 p-6 space-y-6 max-w-[1400px] w-full">
+          <div className="dashboard-section" style={{ animationDelay: "0ms" }}>
+            <TrendChart onSelectDate={setSelectedDate} />
+          </div>
           {openRouterUnavailable ? (
-            <div className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+            <div className="dashboard-section rounded-xl border bg-card p-6 text-sm text-muted-foreground" style={{ animationDelay: "60ms" }}>
               OpenRouter no disponible
               {sources?.openrouter?.reason ? `: ${sources.openrouter.reason}` : "."}
             </div>
           ) : (
             combined && (
               <>
-                <KpiCards projects={projectsForSection()} />
-                <ProjectTable projects={projectsForSection()} />
-                <SessionDetail
-                  sources={sources}
-                  section={section}
-                  selectedDate={selectedDate}
-                  onSelectDate={setSelectedDate}
-                />
+                <div className="dashboard-section" style={{ animationDelay: "60ms" }}>
+                  <KpiCards projects={projectsForSection()} />
+                </div>
+                <div className="dashboard-section" style={{ animationDelay: "120ms" }}>
+                  <ProjectTable projects={projectsForSection()} />
+                </div>
+                <div className="dashboard-section" style={{ animationDelay: "180ms" }}>
+                  <SessionDetail
+                    sources={sources}
+                    section={section}
+                    selectedDate={selectedDate}
+                    onSelectDate={setSelectedDate}
+                  />
+                </div>
               </>
             )
           )}

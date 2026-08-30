@@ -1,11 +1,12 @@
-import { LayoutGrid, Sparkles, TerminalSquare, Code2, Network, Activity } from "lucide-react";
+import { LayoutGrid, Activity } from "lucide-react";
+import { SOURCE_META } from "@/lib/sources";
 
 const SECTIONS = [
-  { key: "all", label: "Todo", icon: LayoutGrid },
-  { key: "claude_code", label: "Claude Code", icon: Sparkles, color: "var(--viz-blue)" },
-  { key: "codex", label: "Codex", icon: TerminalSquare, color: "var(--viz-violet)" },
-  { key: "opencode", label: "OpenCode", icon: Code2, color: "var(--viz-aqua)" },
-  { key: "openrouter", label: "OpenRouter", icon: Network, color: "var(--viz-orange)" },
+  { key: "all", label: "Todo", icon: LayoutGrid, color: undefined },
+  { key: "claude_code", ...SOURCE_META.claude_code },
+  { key: "codex", ...SOURCE_META.codex },
+  { key: "opencode", ...SOURCE_META.opencode },
+  { key: "openrouter", ...SOURCE_META.openrouter },
 ] as const;
 
 export type SectionKey = (typeof SECTIONS)[number]["key"];
@@ -38,10 +39,7 @@ export function Sidebar({ active, onSelect }: SidebarProps) {
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
-              <Icon
-                className="h-4 w-4 shrink-0"
-                style={{ color: isActive ? ("color" in s ? s.color : undefined) : undefined }}
-              />
+              <Icon className="h-4 w-4 shrink-0" style={{ color: isActive ? s.color : undefined }} />
               {s.label}
             </button>
           );

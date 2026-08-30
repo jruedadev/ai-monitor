@@ -2,14 +2,9 @@ import { CalendarClock } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { SOURCE_META, chipStyle } from "@/lib/sources";
 import type { SectionKey } from "@/components/Sidebar";
 import type { SessionDetailEntry, UsageSnapshot } from "@/lib/api";
-
-const SOURCE_STYLE: Record<string, { label: string; color: string }> = {
-  claude_code: { label: "Claude Code", color: "var(--viz-blue)" },
-  codex: { label: "Codex", color: "var(--viz-violet)" },
-  opencode: { label: "OpenCode", color: "var(--viz-aqua)" },
-};
 
 interface FlatSession extends SessionDetailEntry {
   source: string;
@@ -89,19 +84,16 @@ export function SessionDetail({ sources, section, selectedDate, onSelectDate }: 
           </TableHeader>
           <TableBody>
             {rows.map((s) => {
-              const style = SOURCE_STYLE[s.source];
+              const meta = SOURCE_META[s.source];
               return (
                 <TableRow key={`${s.source}-${s.session_id}`}>
                   {section === "all" && (
                     <TableCell>
                       <span
                         className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-                        style={{
-                          color: style?.color,
-                          backgroundColor: `color-mix(in srgb, ${style?.color ?? "gray"} 15%, transparent)`,
-                        }}
+                        style={chipStyle(meta?.color)}
                       >
-                        {style?.label ?? s.source}
+                        {meta?.label ?? s.source}
                       </span>
                     </TableCell>
                   )}

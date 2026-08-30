@@ -1,18 +1,12 @@
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { SOURCE_META, chipStyle } from "@/lib/sources";
 import type { ProjectUsage } from "@/lib/api";
 
 interface ProjectTableProps {
   projects: Record<string, ProjectUsage>;
 }
-
-const SOURCE_STYLE: Record<string, { label: string; color: string }> = {
-  claude_code: { label: "Claude Code", color: "var(--viz-blue)" },
-  codex: { label: "Codex", color: "var(--viz-violet)" },
-  opencode: { label: "OpenCode", color: "var(--viz-aqua)" },
-  openrouter: { label: "OpenRouter", color: "var(--viz-orange)" },
-};
 
 export function ProjectTable({ projects }: ProjectTableProps) {
   const rows = Object.entries(projects).sort((a, b) => b[1].total_tokens - a[1].total_tokens);
@@ -51,17 +45,14 @@ export function ProjectTable({ projects }: ProjectTableProps) {
               <TableCell>
                 <div className="flex gap-1.5">
                   {v.by_source.map((src) => {
-                    const style = SOURCE_STYLE[src];
+                    const meta = SOURCE_META[src];
                     return (
                       <span
                         key={src}
                         className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-                        style={{
-                          color: style?.color,
-                          backgroundColor: `color-mix(in srgb, ${style?.color ?? "gray"} 15%, transparent)`,
-                        }}
+                        style={chipStyle(meta?.color)}
                       >
-                        {style?.label ?? src}
+                        {meta?.label ?? src}
                       </span>
                     );
                   })}

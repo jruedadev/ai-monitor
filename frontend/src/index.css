@@ -233,6 +233,29 @@
   }
 }
 
+/* Component token: entrada sutil para las secciones del dashboard al
+   montar/cambiar de vista — respeta prefers-reduced-motion. */
+@keyframes dashboard-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dashboard-section {
+  animation: dashboard-enter 0.35s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-section {
+    animation: none;
+  }
+}
+
 /* ai-monitor: make the trend line clearly visible in both themes */
 .ai-monitor-trendchart .recharts-line-curve {
   stroke: var(--tremor-brand-emphasis) !important;
