@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Card, Title, LineChart } from "@tremor/react";
+import { LineChart } from "@tremor/react";
 
 interface DailyProjectRow {
   date: string;
@@ -43,9 +43,21 @@ export function TrendChart({ onSelectDate }: TrendChartProps) {
   const formatTokens = (value: number) =>
     new Intl.NumberFormat("es", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 
+  const nonZero = chartData.filter((d) => d.Tokens > 0);
+  const avg = nonZero.length ? nonZero.reduce((s, d) => s + d.Tokens, 0) / nonZero.length : 0;
+  const max = chartData.reduce((m, d) => Math.max(m, d.Tokens), 0);
+  const activeDays = nonZero.length;
+
   return (
-    <Card>
-      <Title>Tendencia de tokens (90 días)</Title>
+    <div className="rounded-xl border bg-card p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 mb-4">
+        <h2 className="font-semibold">Tendencia de tokens (90 días)</h2>
+        <div className="flex gap-5 text-sm text-muted-foreground">
+          <span>Promedio/día activo <span className="text-foreground font-medium tabular-nums">{formatTokens(avg)}</span></span>
+          <span>Pico <span className="text-foreground font-medium tabular-nums">{formatTokens(max)}</span></span>
+          <span>Días activos <span className="text-foreground font-medium tabular-nums">{activeDays}/{chartData.length}</span></span>
+        </div>
+      </div>
       <LineChart
         data={chartData}
         index="date"
@@ -60,6 +72,6 @@ export function TrendChart({ onSelectDate }: TrendChartProps) {
           if (typeof date === "string" && onSelectDate) onSelectDate(date);
         }}
       />
-    </Card>
+    </div>
   );
 }

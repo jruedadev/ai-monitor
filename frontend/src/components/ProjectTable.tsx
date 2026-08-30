@@ -7,29 +7,73 @@ interface ProjectTableProps {
   projects: Record<string, ProjectUsage>;
 }
 
+const SOURCE_STYLE: Record<string, { label: string; color: string }> = {
+  claude_code: { label: "Claude Code", color: "var(--viz-blue)" },
+  codex: { label: "Codex", color: "var(--viz-violet)" },
+  opencode: { label: "OpenCode", color: "var(--viz-aqua)" },
+  openrouter: { label: "OpenRouter", color: "var(--viz-orange)" },
+};
+
 export function ProjectTable({ projects }: ProjectTableProps) {
   const rows = Object.entries(projects).sort((a, b) => b[1].total_tokens - a[1].total_tokens);
+  const maxTokens = Math.max(1, ...rows.map(([, v]) => v.total_tokens));
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Proyecto</TableHead>
-          <TableHead className="text-right">Tokens</TableHead>
-          <TableHead className="text-right">Costo</TableHead>
-          <TableHead className="text-right">Sesiones</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map(([name, v]) => (
-          <TableRow key={name}>
-            <TableCell className="max-w-xs truncate" title={name}>{name}</TableCell>
-            <TableCell className="text-right">{v.total_tokens.toLocaleString()}</TableCell>
-            <TableCell className="text-right">${v.cost.toFixed(2)}</TableCell>
-            <TableCell className="text-right">{v.session_count}</TableCell>
+    <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="px-5 py-4 border-b">
+        <h2 className="font-semibold">Proyectos</h2>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="text-xs uppercase tracking-wide text-muted-foreground">Proyecto</TableHead>
+            <TableHead className="text-xs uppercase tracking-wide text-muted-foreground">Fuente</TableHead>
+            <TableHead className="text-right text-xs uppercase tracking-wide text-muted-foreground">Tokens</TableHead>
+            <TableHead className="text-right text-xs uppercase tracking-wide text-muted-foreground">Costo</TableHead>
+            <TableHead className="text-right text-xs uppercase tracking-wide text-muted-foreground">Sesiones</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {rows.map(([name, v]) => (
+            <TableRow key={name}>
+              <TableCell className="max-w-xs">
+                <div className="truncate font-medium" title={name}>{name}</div>
+                <div className="mt-1.5 h-1 w-full max-w-[180px] rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.max(4, (v.total_tokens / maxTokens) * 100)}%`,
+                      backgroundColor: "var(--viz-blue)",
+                    }}
+                  />
+                </div>
+              </TableCell>
+              <TableCell>
+                <div className="flex gap-1.5">
+                  {v.by_source.map((src) => {
+                    const style = SOURCE_STYLE[src];
+                    return (
+                      <span
+                        key={src}
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                        style={{
+                          color: style?.color,
+                          backgroundColor: `color-mix(in srgb, ${style?.color ?? "gray"} 15%, transparent)`,
+                        }}
+                      >
+                        {style?.label ?? src}
+                      </span>
+                    );
+                  })}
+                </div>
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{v.total_tokens.toLocaleString("es")}</TableCell>
+              <TableCell className="text-right tabular-nums">${v.cost.toFixed(2)}</TableCell>
+              <TableCell className="text-right tabular-nums">{v.session_count}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

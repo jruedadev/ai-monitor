@@ -36,40 +36,51 @@ export default function App() {
 
   const openRouterUnavailable = section === "openrouter" && sources?.openrouter?.unavailable;
 
+  const activeLabel = section === "all"
+    ? "Vista general"
+    : { claude_code: "Claude Code", codex: "Codex", opencode: "OpenCode", openrouter: "OpenRouter" }[section];
+
   return (
     <div className="min-h-screen flex bg-background text-foreground">
       <Sidebar active={section} onSelect={setSection} />
-      <main className="flex-1 p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">ai-monitor</h1>
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="sticky top-0 z-10 flex items-center justify-between px-6 h-16 border-b bg-background/80 backdrop-blur">
+          <h1 className="text-lg font-semibold">{activeLabel}</h1>
           <div className="flex items-center gap-3">
-            <span className={`text-xs ${connected ? "text-green-500" : "text-muted-foreground"}`}>
-              {connected ? "● en vivo" : "○ conectando..."}
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                connected ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground"
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`} />
+              {connected ? "En vivo" : "Conectando..."}
             </span>
             <ThemeToggle />
           </div>
-        </div>
-        <TrendChart onSelectDate={setSelectedDate} />
-        {openRouterUnavailable ? (
-          <div className="rounded-md border p-6 text-sm text-muted-foreground">
-            OpenRouter no disponible
-            {sources?.openrouter?.reason ? `: ${sources.openrouter.reason}` : "."}
-          </div>
-        ) : (
-          combined && (
-            <>
-              <KpiCards projects={projectsForSection()} />
-              <ProjectTable projects={projectsForSection()} />
-              <SessionDetail
-                sources={sources}
-                section={section}
-                selectedDate={selectedDate}
-                onSelectDate={setSelectedDate}
-              />
-            </>
-          )
-        )}
-      </main>
+        </header>
+        <main className="flex-1 p-6 space-y-6 max-w-[1400px] w-full">
+          <TrendChart onSelectDate={setSelectedDate} />
+          {openRouterUnavailable ? (
+            <div className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+              OpenRouter no disponible
+              {sources?.openrouter?.reason ? `: ${sources.openrouter.reason}` : "."}
+            </div>
+          ) : (
+            combined && (
+              <>
+                <KpiCards projects={projectsForSection()} />
+                <ProjectTable projects={projectsForSection()} />
+                <SessionDetail
+                  sources={sources}
+                  section={section}
+                  selectedDate={selectedDate}
+                  onSelectDate={setSelectedDate}
+                />
+              </>
+            )
+          )}
+        </main>
+      </div>
     </div>
   );
 }

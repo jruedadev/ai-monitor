@@ -57,6 +57,14 @@
   --tremor-content-emphasis: #374151;
   --tremor-content-strong: #111827;
   --tremor-content-inverted: #ffffff;
+
+  /* Paleta categórica validada (dataviz skill): identidad por fuente/serie,
+     nunca reciclada por rango — slot 1 blue, 2 orange, 3 aqua, 4 yellow. */
+  --viz-blue: #2a78d6;
+  --viz-orange: #eb6834;
+  --viz-aqua: #1baf7a;
+  --viz-yellow: #eda100;
+  --viz-violet: #4a3aa7;
 }
 
 .dark {
@@ -108,6 +116,13 @@
   --tremor-content-emphasis: #e5e7eb;
   --tremor-content-strong: #f9fafb;
   --tremor-content-inverted: #030712;
+
+  /* Mismos ocho tonos, escalonados para superficie oscura (dataviz skill). */
+  --viz-blue: #3987e5;
+  --viz-orange: #d95926;
+  --viz-aqua: #199e70;
+  --viz-yellow: #c98500;
+  --viz-violet: #9085e9;
 }
 
 @theme inline {
@@ -139,6 +154,12 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-viz-blue: var(--viz-blue);
+  --color-viz-orange: var(--viz-orange);
+  --color-viz-aqua: var(--viz-aqua);
+  --color-viz-yellow: var(--viz-yellow);
+  --color-viz-violet: var(--viz-violet);
 
   /* Tremor's tokens are named per light/dark class (not per-token cascade like the
      shadcn tokens above), so both variants are always defined and Tremor's own
