@@ -3,39 +3,20 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { SOURCE_META, chipStyle } from "@/lib/sources";
+import { collectSessions } from "@/lib/sessions";
+import { SessionIdentity } from "@/components/SessionIdentity";
 import type { SectionKey } from "@/components/Sidebar";
-import type { SessionDetailEntry, UsageSnapshot } from "@/lib/api";
-
-interface FlatSession extends SessionDetailEntry {
-  source: string;
-  project: string;
-}
+import type { UsageSnapshot } from "@/lib/api";
 
 interface SessionDetailProps {
   sources: UsageSnapshot["sources"] | null | undefined;
   section: SectionKey;
   selectedDate: string | null;
   onSelectDate: (date: string | null) => void;
+  onSelectProject?: (project: string) => void;
 }
 
-function collectSessions(sources: UsageSnapshot["sources"] | null | undefined, section: SectionKey): FlatSession[] {
-  if (!sources) return [];
-  const sourceKeys = section === "all"
-    ? (["claude_code", "codex", "opencode"] as const)
-    : section === "openrouter" ? [] : ([section] as const);
-
-  const rows: FlatSession[] = [];
-  for (const key of sourceKeys) {
-    for (const [project, usage] of Object.entries(sources[key] ?? {})) {
-      for (const session of usage.sessions_detail) {
-        rows.push({ ...session, source: key, project });
-      }
-    }
-  }
-  return rows;
-}
-
-export function SessionDetail({ sources, section, selectedDate, onSelectDate }: SessionDetailProps) {
+export function SessionDetail({ sources, section, selectedDate, onSelectDate, onSelectProject }: SessionDetailProps) {
   if (section === "openrouter") {
     return null;
   }
@@ -97,9 +78,21 @@ export function SessionDetail({ sources, section, selectedDate, onSelectDate }: 
                       </span>
                     </TableCell>
                   )}
-                  <TableCell className="max-w-xs truncate" title={s.project}>{s.project}</TableCell>
-                  <TableCell className="max-w-sm truncate" title={s.title ?? s.session_id}>
-                    {s.title ?? s.session_id}
+                  <TableCell className="max-w-xs">
+                    {onSelectProject ? (
+                      <button
+                        className="truncate text-left hover:underline underline-offset-2"
+                        title={s.project}
+                        onClick={() => onSelectProject(s.project)}
+                      >
+                        {s.project}
+                      </button>
+                    ) : (
+                      <div className="truncate" title={s.project}>{s.project}</div>
+                    )}
+                  </TableCell>
+                  <TableCell className="max-w-sm">
+                    <SessionIdentity title={s.title} sessionId={s.session_id} />
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{s.tokens.toLocaleString("es")}</TableCell>
                   <TableCell className="text-right tabular-nums">${s.cost.toFixed(2)}</TableCell>

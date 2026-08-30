@@ -5,12 +5,14 @@ import { KpiCards } from "@/components/KpiCards";
 import { ProjectTable } from "@/components/ProjectTable";
 import { TrendChart } from "@/components/TrendChart";
 import { SessionDetail } from "@/components/SessionDetail";
+import { ProjectDetailSheet } from "@/components/ProjectDetailSheet";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { ProjectUsage } from "@/lib/api";
 
 export default function App() {
   const [section, setSection] = useState<SectionKey>("all");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const { sources, combined, connected } = useUsageStream();
 
   const projectsForSection = (): Record<string, ProjectUsage> => {
@@ -74,7 +76,10 @@ export default function App() {
                   <KpiCards projects={projectsForSection()} />
                 </div>
                 <div className="dashboard-section" style={{ animationDelay: "120ms" }}>
-                  <ProjectTable projects={projectsForSection()} />
+                  <ProjectTable
+                    projects={projectsForSection()}
+                    onSelectProject={section === "openrouter" ? undefined : setSelectedProject}
+                  />
                 </div>
                 <div className="dashboard-section" style={{ animationDelay: "180ms" }}>
                   <SessionDetail
@@ -82,6 +87,7 @@ export default function App() {
                     section={section}
                     selectedDate={selectedDate}
                     onSelectDate={setSelectedDate}
+                    onSelectProject={setSelectedProject}
                   />
                 </div>
               </>
@@ -89,6 +95,12 @@ export default function App() {
           )}
         </main>
       </div>
+      <ProjectDetailSheet
+        sources={sources}
+        section={section}
+        project={selectedProject}
+        onClose={() => setSelectedProject(null)}
+      />
     </div>
   );
 }

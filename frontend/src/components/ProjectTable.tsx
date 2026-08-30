@@ -6,9 +6,10 @@ import type { ProjectUsage } from "@/lib/api";
 
 interface ProjectTableProps {
   projects: Record<string, ProjectUsage>;
+  onSelectProject?: (project: string) => void;
 }
 
-export function ProjectTable({ projects }: ProjectTableProps) {
+export function ProjectTable({ projects, onSelectProject }: ProjectTableProps) {
   const rows = Object.entries(projects).sort((a, b) => b[1].total_tokens - a[1].total_tokens);
   const maxTokens = Math.max(1, ...rows.map(([, v]) => v.total_tokens));
 
@@ -29,9 +30,13 @@ export function ProjectTable({ projects }: ProjectTableProps) {
         </TableHeader>
         <TableBody>
           {rows.map(([name, v]) => (
-            <TableRow key={name}>
+            <TableRow
+              key={name}
+              className={onSelectProject ? "cursor-pointer" : undefined}
+              onClick={onSelectProject ? () => onSelectProject(name) : undefined}
+            >
               <TableCell className="max-w-xs">
-                <div className="truncate font-medium" title={name}>{name}</div>
+                <div className={`truncate font-medium ${onSelectProject ? "hover:underline underline-offset-2" : ""}`} title={name}>{name}</div>
                 <div className="mt-1.5 h-1 w-full max-w-[180px] rounded-full bg-muted overflow-hidden">
                   <div
                     className="h-full rounded-full"
