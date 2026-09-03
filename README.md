@@ -87,7 +87,7 @@ Además del HTML estático y la tabla en terminal, hay un dashboard web en vivo 
 ```bash
 # 1. Compilar el frontend una vez (o cada vez que cambie)
 cd frontend
-npm install
+npm install --legacy-peer-deps  # @base-ui/react pide date-fns 4, @tremor/react pide 3
 npm run build
 cd ..
 
@@ -98,7 +98,7 @@ python3 server.py
 
 El puerto es configurable con `AI_MONITOR_PORT` (default `8420`). El servidor recolecta datos de las 4 fuentes cada 60 segundos y los empuja al navegador vía SSE — no hace falta recargar la página.
 
-**Como servicio de systemd**: `./install.sh` pregunta si quieres instalar también `ai-monitor-server.service` (servicio de larga duración, separado del `ai-monitor.timer` existente que solo regenera el HTML estático).
+**Como servicio de systemd**: `./install.sh` pregunta si quieres instalar también `ai-monitor-server.service` (servicio de larga duración, separado del `ai-monitor.timer` existente que solo regenera el HTML estático). Si aceptas y falta `frontend/dist`, el script lo compila automáticamente (con `npm install --legacy-peer-deps && npm run build`) siempre que haya `npm` disponible; si no hay `npm` o la compilación falla, solo muestra una advertencia con el comando manual.
 
 ### Histórico más allá de la retención de cada proveedor
 

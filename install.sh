@@ -33,11 +33,25 @@ echo ""
 read -r -p "¿Instalar también el servicio del dashboard interactivo (server.py)? [y/N] " REPLY
 if [[ "$REPLY" =~ ^[Yy]$ ]]; then
   if [ ! -d "$REPO_DIR/frontend/dist" ]; then
-    echo ""
-    echo "ADVERTENCIA: no se encontró $REPO_DIR/frontend/dist"
-    echo "El frontend no está compilado. Antes de activar el servicio, corre:"
-    echo "  cd $REPO_DIR/frontend && npm install && npm run build"
-    echo ""
+    if command -v npm >/dev/null 2>&1; then
+      echo ""
+      echo "No se encontró $REPO_DIR/frontend/dist — compilando el frontend..."
+      if (cd "$REPO_DIR/frontend" && npm install --legacy-peer-deps && npm run build); then
+        echo "Frontend compilado en $REPO_DIR/frontend/dist"
+      else
+        echo ""
+        echo "ADVERTENCIA: falló la compilación automática del frontend."
+        echo "El servicio no arrancará hasta que compiles a mano:"
+        echo "  cd $REPO_DIR/frontend && npm install --legacy-peer-deps && npm run build"
+        echo ""
+      fi
+    else
+      echo ""
+      echo "ADVERTENCIA: no se encontró $REPO_DIR/frontend/dist y no hay npm instalado."
+      echo "El frontend no está compilado. Antes de activar el servicio, instala Node/npm y corre:"
+      echo "  cd $REPO_DIR/frontend && npm install --legacy-peer-deps && npm run build"
+      echo ""
+    fi
   fi
 
   sed \
