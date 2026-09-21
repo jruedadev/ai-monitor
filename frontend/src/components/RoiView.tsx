@@ -3,6 +3,7 @@ import { Save } from "lucide-react";
 import { fetchRoiSettings, saveRoiSettings, type RoiSettings, type UsageSnapshot } from "@/lib/api";
 import { collectSessions, sessionDurationSeconds } from "@/lib/sessions";
 import { SOURCE_META } from "@/lib/sources";
+import { clientOf, groupProjectsByClient } from "@/lib/clients";
 
 interface RoiViewProps {
   sources: UsageSnapshot["sources"] | null;
@@ -24,6 +25,7 @@ export function RoiView({ sources }: RoiViewProps) {
   const [settings, setSettings] = useState<RoiSettings | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [scopeFilter, setScopeFilter] = useState<string>("");
 
   useEffect(() => {
     fetchRoiSettings().then((s) => {
@@ -50,10 +52,43 @@ export function RoiView({ sources }: RoiViewProps) {
 
   if (!settings) return null;
 
+  const allProjectPaths = Array.from(
+    new Set(ROI_SOURCES.flatMap((source) => Object.keys(sources?.[source] ?? {}))),
+  );
+  const projectsByClient = groupProjectsByClient(allProjectPaths);
+  const clientOptions = Object.keys(projectsByClient).sort();
+
+  const matchesScope = (path: string): boolean => {
+    if (!scopeFilter) return true;
+    if (scopeFilter.startsWith("client:")) return clientOf(path) === scopeFilter.slice(7);
+    if (scopeFilter.startsWith("project:")) return path === scopeFilter.slice(8);
+    return true;
+  };
+
   return (
     <div className="space-y-6">
       <div className="rounded-xl border bg-card p-5 space-y-4">
         <h2 className="text-sm font-medium">Parametrización</h2>
+        <label className="block space-y-1.5">
+          <span className="text-xs text-muted-foreground">Acotar a</span>
+          <select
+            className="w-full max-w-xs rounded-lg border bg-background px-3 py-2 text-sm"
+            value={scopeFilter}
+            onChange={(e) => setScopeFilter(e.target.value)}
+          >
+            <option value="">Todos los proyectos</option>
+            {clientOptions.map((client) => (
+              <optgroup key={client} label={client}>
+                <option value={`client:${client}`}>Todo {client}</option>
+                {projectsByClient[client].map((path) => (
+                  <option key={path} value={`project:${path}`}>
+                    {path.split("/").filter(Boolean).pop() ?? path}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field
             label="Suscripción Claude ($/mes)"
@@ -83,7 +118,7 @@ export function RoiView({ sources }: RoiViewProps) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {ROI_SOURCES.map((source) => (
-          <SourceRoiCard key={source} source={source} sources={sources} settings={settings} />
+          <SourceRoiCard key={source} source={source} sources={sources} settings={settings} matchesScope={matchesScope} />
         ))}
       </div>
     </div>
@@ -111,17 +146,21 @@ function SourceRoiCard({
   source,
   sources,
   settings,
+  matchesScope,
 }: {
   source: RoiSource;
   sources: UsageSnapshot["sources"] | null;
   settings: RoiSettings;
+  matchesScope: (path: string) => boolean;
 }) {
   const meta = SOURCE_META[source];
   const projects = sources?.[source] ?? {};
-  const apiCost = Object.values(projects).reduce((sum, p) => sum + p.cost, 0);
+  const apiCost = Object.entries(projects)
+    .filter(([path]) => matchesScope(path))
+    .reduce((sum, [, p]) => sum + p.cost, 0);
   const subscriptionCost = settings[SUBSCRIPTION_KEY[source]];
 
-  const sessions = collectSessions(sources, source);
+  const sessions = collectSessions(sources, source).filter((s) => matchesScope(s.project));
   const totalHours = sessions.reduce((sum, s) => sum + sessionDurationSeconds(s), 0) / 3600;
   const hourlyRate = settings.hourly_rate;
   const valueGenerated = hourlyRate !== null ? totalHours * hourlyRate : null;
