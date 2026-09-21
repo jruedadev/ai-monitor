@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { LineChart } from "@tremor/react";
 import { SOURCE_META } from "@/lib/sources";
+import { clientOf } from "@/lib/clients";
 import type { SectionKey } from "@/components/Sidebar";
 
 interface DailyProjectRow {
@@ -21,9 +22,10 @@ interface DailyModelRow {
 interface TrendChartProps {
   section: SectionKey;
   onSelectDate?: (date: string) => void;
+  clientFilter?: string | null;
 }
 
-export function TrendChart({ section, onSelectDate }: TrendChartProps) {
+export function TrendChart({ section, onSelectDate, clientFilter }: TrendChartProps) {
   const [rows, setRows] = useState<DailyProjectRow[]>([]);
   const [modelRows, setModelRows] = useState<DailyModelRow[]>([]);
 
@@ -47,7 +49,10 @@ export function TrendChart({ section, onSelectDate }: TrendChartProps) {
       byDate[date] = (byDate[date] ?? 0) + row.tokens;
     }
   } else {
-    for (const row of rows) {
+    const filteredRows = clientFilter
+      ? rows.filter((row) => clientOf(row.project) === clientFilter)
+      : rows;
+    for (const row of filteredRows) {
       if (section !== "all" && row.source !== section) continue;
       const date = row.date.slice(0, 10);
       byDate[date] = (byDate[date] ?? 0) + row.tokens;
