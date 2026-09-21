@@ -21,7 +21,7 @@ def collect(projects_dir=None, db_path=None):
         "cost": 0.0, "cost_incomplete": False, "messages": 0, "sessions": set(),
         "by_day": defaultdict(lambda: {"tokens": 0, "cost": 0.0}),
         "sessions_detail": defaultdict(lambda: {
-            "tokens": 0, "cost": 0.0, "title": None, "last_ts": None, "cwd": None
+            "tokens": 0, "cost": 0.0, "title": None, "first_ts": None, "last_ts": None, "cwd": None
         }),
     })
 
@@ -34,7 +34,7 @@ def collect(projects_dir=None, db_path=None):
             with open(jf, "r", errors="ignore") as fh:
                 lines = fh.readlines()
 
-            resolved_name = dname
+            resolved_name = None
             title_for_session = None
             for line in lines:
                 line = line.strip()
@@ -44,11 +44,12 @@ def collect(projects_dir=None, db_path=None):
                     rec = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                if resolved_name is None and rec.get("cwd"):
+                    resolved_name = rec["cwd"]
                 if rec.get("type") == "ai-title" and rec.get("aiTitle"):
                     title_for_session = rec["aiTitle"]
-                if rec.get("cwd"):
-                    resolved_name = rec["cwd"]
-                    break
+
+            resolved_name = resolved_name or dname
 
             if title_for_session:
                 projects[resolved_name]["sessions_detail"][session_id]["title"] = title_for_session
@@ -101,6 +102,8 @@ def collect(projects_dir=None, db_path=None):
                 sd["tokens"] += inp + out + cr + cw
                 sd["cost"] += c
                 sd["cwd"] = cwd or sd["cwd"]
+                if ts and (sd["first_ts"] is None or ts < sd["first_ts"]):
+                    sd["first_ts"] = ts
                 if ts and (sd["last_ts"] is None or ts > sd["last_ts"]):
                     sd["last_ts"] = ts
 
@@ -117,7 +120,7 @@ def collect(projects_dir=None, db_path=None):
             "by_day": {k: {"tokens": v["tokens"], "cost": round(v["cost"], 4)} for k, v in p["by_day"].items()},
             "sessions_detail": [
                 {"session_id": sid, "tokens": v["tokens"], "cost": round(v["cost"], 4),
-                 "title": v["title"], "last_ts": v["last_ts"], "cwd": v["cwd"],
+                 "title": v["title"], "first_ts": v["first_ts"], "last_ts": v["last_ts"], "cwd": v["cwd"],
                  "date": v["last_ts"][:10] if v["last_ts"] else None}
                 for sid, v in p["sessions_detail"].items()
             ],

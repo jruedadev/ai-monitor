@@ -1,6 +1,6 @@
 # ai-monitor
 
-Dashboard local de uso de IA: agrega tokens y costo por proyecto a partir de los datos que **Claude Code**, **Codex** y **OpenCode** guardan localmente, más el consumo reportado por **OpenRouter** vía su API. Sin dependencias externas — solo librería estándar de Python.
+Dashboard local de uso de IA: agrega tokens y costo por proyecto a partir de los datos que **Claude Code**, **Codex**, **OpenCode** y **Hermes Agent** guardan localmente, más el consumo reportado por **OpenRouter** vía su API. Sin dependencias externas — solo librería estándar de Python.
 
 ## Fuentes soportadas
 
@@ -9,6 +9,7 @@ Dashboard local de uso de IA: agrega tokens y costo por proyecto a partir de los
 | Claude Code | `~/.claude/projects/*/*.jsonl` | proyecto (cwd real) |
 | Codex | `~/.codex/state_5.sqlite` | proyecto (cwd) |
 | OpenCode | `~/.local/share/opencode/opencode.db` | proyecto (directory) |
+| Hermes Agent | `~/.hermes/state.db` (tabla `sessions`) | proyecto (cwd; `unknown` si la sesión no tiene cwd, p.ej. chats de mensajería) |
 | OpenRouter | API `openrouter.ai/api/v1/activity` (requiere `OPENROUTER_API_KEY`) | modelo |
 
 Cada fuente que no esté instalada, o cuya key no esté configurada, se omite silenciosamente de la tabla — solo OpenRouter muestra un aviso explícito cuando falta la API key. El resto del dashboard sigue funcionando.
@@ -16,7 +17,7 @@ Cada fuente que no esté instalada, o cuya key no esté configurada, se omite si
 ## Uso
 
 ```bash
-python3 main.py                     # tabla combinada en terminal (Claude+Codex+OpenCode)
+python3 main.py                     # tabla combinada en terminal (Claude+Codex+OpenCode+Hermes)
 python3 main.py --json              # todas las fuentes crudas + vista combinada, en JSON
 python3 main.py --html out.html     # dashboard HTML con pestañas por fuente
 ```
@@ -102,18 +103,19 @@ El puerto es configurable con `AI_MONITOR_PORT` (default `8420`). El servidor re
 
 ### Histórico más allá de la retención de cada proveedor
 
-`server.py` (y también `main.py`, en cada ejecución) guarda un rollup diario por proyecto/modelo en `~/.local/share/ai-monitor/history.db` (SQLite). Si Claude Code, Codex u OpenCode eventualmente rotan o truncan sesiones viejas, ese histórico local no se pierde — el gráfico de tendencia del dashboard interactivo (`GET /api/history`) lee de ahí, no de los datos en vivo.
+`server.py` (y también `main.py`, en cada ejecución) guarda un rollup diario por proyecto/modelo en `~/.local/share/ai-monitor/history.db` (SQLite). Si Claude Code, Codex, OpenCode o Hermes eventualmente rotan o truncan sesiones viejas, ese histórico local no se pierde — el gráfico de tendencia del dashboard interactivo (`GET /api/history`) lee de ahí, no de los datos en vivo.
 
 ## Sobre el costo estimado
 
 - Claude Code y Codex: costo **estimado** con una tabla de precios de lista por modelo. Si el modelo no está mapeado, el costo de esa sesión no se estima (no se usa un precio por defecto que podría ser incorrecto).
 - Codex no expone un desglose de tokens por input/output/cache — solo un total `tokens_used` por hilo. Por eso el costo de Codex se estima tratando ese total como si fueran todos tokens de input; es una aproximación que puede sobre o subestimar el costo real según la mezcla real de tokens de cada sesión.
 - OpenCode: usa el costo que **OpenCode ya calculó** para cada sesión — no se re-estima.
+- Hermes Agent: usa el costo que **Hermes ya calculó** para cada sesión (`actual_cost_usd` si existe, si no `estimated_cost_usd`) — no se re-estima.
 - OpenRouter: costo real reportado por su API.
 
 Ninguno de estos números refleja lo que realmente pagas si usas un plan de suscripción (Pro/Max) en vez de facturación por API — son un proxy relativo para comparar qué tan pesado es un proyecto o tarea frente a otro.
 
-**Nota sobre OpenCode + OpenRouter**: cuando OpenCode enruta un modelo a través de OpenRouter, ese consumo puede aparecer en ambas pestañas. La vista "Todo" combinada solo suma Claude Code + Codex + OpenCode (nunca OpenRouter) para evitar doble conteo.
+**Nota sobre OpenCode/Hermes + OpenRouter**: cuando OpenCode o Hermes enrutan un modelo a través de OpenRouter, ese consumo puede aparecer en ambas pestañas. La vista "Todo" combinada solo suma Claude Code + Codex + OpenCode + Hermes (nunca OpenRouter) para evitar doble conteo.
 
 ### Tabla de precios (SQLite, no un dict hardcodeado)
 

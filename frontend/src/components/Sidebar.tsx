@@ -1,4 +1,4 @@
-import { LayoutGrid, Activity } from "lucide-react";
+import { LayoutGrid, Activity, Scale } from "lucide-react";
 import { SOURCE_META } from "@/lib/sources";
 
 const SECTIONS = [
@@ -6,7 +6,9 @@ const SECTIONS = [
   { key: "claude_code", ...SOURCE_META.claude_code },
   { key: "codex", ...SOURCE_META.codex },
   { key: "opencode", ...SOURCE_META.opencode },
+  { key: "hermes", ...SOURCE_META.hermes },
   { key: "openrouter", ...SOURCE_META.openrouter },
+  { key: "roi", label: "ROI", icon: Scale, color: "var(--viz-aqua)" },
 ] as const;
 
 export type SectionKey = (typeof SECTIONS)[number]["key"];

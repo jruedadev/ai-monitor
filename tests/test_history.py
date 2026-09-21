@@ -70,11 +70,86 @@ class TestHistory(unittest.TestCase):
 
         self.assertEqual(rows, [("2026-08-01", 150), ("2026-08-02", 200)])
 
+    def test_record_snapshot_normalizes_datetime_day_keys(self):
+        sources = {
+            "claude_code": {},
+            "codex": {},
+            "opencode": {},
+            "openrouter": {
+                "unavailable": False,
+                "by_day": {"2026-08-12 00:00:00": {"tokens": 500, "cost": 0.05}},
+            },
+        }
+
+        history.record_snapshot(sources, db_path=self.db_path)
+
+        con = sqlite3.connect(self.db_path)
+        rows = con.execute("SELECT date, tokens FROM daily_model").fetchall()
+        con.close()
+        self.assertEqual(rows, [("2026-08-12", 500)])
+
+    def test_ensure_schema_migrates_legacy_datetime_rows_preferring_canonical(self):
+        con = sqlite3.connect(self.db_path)
+        con.executescript(history._SCHEMA)
+        con.execute(
+            "INSERT INTO daily_project (date, source, project, tokens, cost) VALUES (?, ?, ?, ?, ?)",
+            ("2026-08-12 00:00:00", "claude_code", "/home/user/demo", 100, 0.01),
+        )
+        con.execute(
+            "INSERT INTO daily_project (date, source, project, tokens, cost) VALUES (?, ?, ?, ?, ?)",
+            ("2026-08-12", "claude_code", "/home/user/demo", 50, 0.005),
+        )
+        con.execute(
+            "INSERT INTO daily_model (date, model, tokens, cost) VALUES (?, ?, ?, ?)",
+            ("2026-08-12 00:00:00", "__all__", 500, 0.05),
+        )
+        con.execute(
+            "INSERT INTO daily_model (date, model, tokens, cost) VALUES (?, ?, ?, ?)",
+            ("2026-08-12", "__all__", 700, 0.07),
+        )
+        con.commit()
+        con.close()
+
+        history.ensure_schema(self.db_path)
+
+        con = sqlite3.connect(self.db_path)
+        project_rows = con.execute(
+            "SELECT date, source, project, tokens, cost FROM daily_project"
+        ).fetchall()
+        model_rows = con.execute("SELECT date, model, tokens, cost FROM daily_model").fetchall()
+        con.close()
+        self.assertEqual(
+            project_rows, [("2026-08-12", "claude_code", "/home/user/demo", 50, 0.005)]
+        )
+        self.assertEqual(model_rows, [("2026-08-12", "__all__", 700, 0.07)])
+
+    def test_ensure_schema_keeps_legacy_row_when_no_canonical_exists(self):
+        con = sqlite3.connect(self.db_path)
+        con.executescript(history._SCHEMA)
+        con.execute(
+            "INSERT INTO daily_model (date, model, tokens, cost) VALUES (?, ?, ?, ?)",
+            ("2026-07-01 00:00:00", "__all__", 300, 0.03),
+        )
+        con.commit()
+        con.close()
+
+        history.ensure_schema(self.db_path)
+
+        con = sqlite3.connect(self.db_path)
+        model_rows = con.execute("SELECT date, model, tokens, cost FROM daily_model").fetchall()
+        con.close()
+        self.assertEqual(model_rows, [("2026-07-01", "__all__", 300, 0.03)])
+
     def test_query_history_filters_by_days_and_orders_ascending(self):
+        from datetime import datetime, timedelta, timezone
+
+        today = datetime.now(timezone.utc).date()
+        recent = today - timedelta(days=5)
+        old = today - timedelta(days=120)
         sources = {
             "claude_code": {"/home/user/demo": {"by_day": {
-                "2026-01-01": {"tokens": 10, "cost": 0.001},
-                "2026-08-01": {"tokens": 20, "cost": 0.002},
+                old.isoformat(): {"tokens": 10, "cost": 0.001},
+                recent.isoformat(): {"tokens": 20, "cost": 0.002},
             }}},
             "codex": {}, "opencode": {}, "openrouter": {"unavailable": True, "reason": "x"},
         }
@@ -83,7 +158,36 @@ class TestHistory(unittest.TestCase):
         result = history.query_history(days=30, db_path=self.db_path)
 
         dates = [row["date"] for row in result["daily_project"]]
-        self.assertEqual(dates, ["2026-08-01"])
+        self.assertEqual(dates, [recent.isoformat()])
+
+    def test_get_roi_settings_defaults_to_none_values(self):
+        settings = history.get_roi_settings(db_path=self.db_path)
+        self.assertEqual(
+            settings,
+            {"subscription_cost_claude": None, "subscription_cost_codex": None, "hourly_rate": None},
+        )
+
+    def test_save_and_get_roi_settings_roundtrip(self):
+        history.save_roi_settings(
+            {"subscription_cost_claude": 20.0, "subscription_cost_codex": 25.0, "hourly_rate": 35.5},
+            db_path=self.db_path,
+        )
+
+        settings = history.get_roi_settings(db_path=self.db_path)
+
+        self.assertEqual(
+            settings,
+            {"subscription_cost_claude": 20.0, "subscription_cost_codex": 25.0, "hourly_rate": 35.5},
+        )
+
+    def test_save_roi_settings_partial_update_keeps_other_keys(self):
+        history.save_roi_settings({"subscription_cost_claude": 20.0}, db_path=self.db_path)
+        history.save_roi_settings({"hourly_rate": 40.0}, db_path=self.db_path)
+
+        settings = history.get_roi_settings(db_path=self.db_path)
+
+        self.assertEqual(settings["subscription_cost_claude"], 20.0)
+        self.assertEqual(settings["hourly_rate"], 40.0)
 
 
 if __name__ == "__main__":

@@ -35,6 +35,21 @@ class TestOpenRouterCollector(unittest.TestCase):
         self.assertIn("anthropic/claude-sonnet-5", data["models"])
         self.assertAlmostEqual(data["by_day"]["2026-08-11"]["cost"], 1.25)
 
+    def test_datetime_dates_are_normalized_to_date_only(self):
+        fake_response = {
+            "data": [
+                {"model": "openai/gpt-5.5", "date": "2026-08-12 00:00:00",
+                 "usage": 0.1, "prompt_tokens": 100, "completion_tokens": 50},
+            ]
+        }
+
+        data = openrouter.collect(api_key="fake-key", fetch=lambda url, key: fake_response)
+
+        self.assertFalse(data["unavailable"])
+        self.assertIn("2026-08-12", data["by_day"])
+        self.assertNotIn("2026-08-12 00:00:00", data["by_day"])
+        self.assertEqual(data["by_day"]["2026-08-12"]["tokens"], 150)
+
     def test_malformed_response_marks_unavailable(self):
         data = openrouter.collect(api_key="fake-key", fetch=lambda url, key: "not a dict")
         self.assertTrue(data["unavailable"])

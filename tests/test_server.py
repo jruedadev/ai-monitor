@@ -4,6 +4,7 @@ import tempfile
 import threading
 import time
 import unittest
+import urllib.error
 import urllib.request
 from unittest.mock import patch
 
@@ -22,7 +23,7 @@ class TestServerAPI(unittest.TestCase):
                 "total_tokens": 15, "cost": 0.01, "cost_incomplete": False,
                 "messages": 1, "session_count": 1, "by_day": {}, "sessions_detail": [],
             }},
-            "codex": {}, "opencode": {}, "openrouter": {"unavailable": True, "reason": "x"},
+            "codex": {}, "opencode": {}, "hermes": {}, "openrouter": {"unavailable": True, "reason": "x"},
         }
 
         patcher = patch("server.main.collect_all", return_value=self.fake_sources)
@@ -49,6 +50,15 @@ class TestServerAPI(unittest.TestCase):
         with urllib.request.urlopen(f"http://127.0.0.1:{self.port}{path}", timeout=5) as resp:
             return resp.status, resp.read()
 
+    def _post(self, path, payload):
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}{path}", data=body, method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status, resp.read()
+
     def test_api_usage_returns_current_snapshot(self):
         status, body = self._get("/api/usage")
         self.assertEqual(status, 200)
@@ -61,6 +71,37 @@ class TestServerAPI(unittest.TestCase):
         data = json.loads(body)
         self.assertIn("daily_project", data)
         self.assertIn("daily_model", data)
+
+    def test_get_roi_settings_returns_defaults_when_unset(self):
+        status, body = self._get("/api/roi-settings")
+        self.assertEqual(status, 200)
+        data = json.loads(body)
+        self.assertEqual(
+            data,
+            {"subscription_cost_claude": None, "subscription_cost_codex": None, "hourly_rate": None},
+        )
+
+    def test_post_roi_settings_persists_and_get_reflects_it(self):
+        status, _ = self._post("/api/roi-settings", {"subscription_cost_claude": 20.0, "hourly_rate": 35.0})
+        self.assertEqual(status, 200)
+
+        _, body = self._get("/api/roi-settings")
+        data = json.loads(body)
+        self.assertEqual(data["subscription_cost_claude"], 20.0)
+        self.assertEqual(data["hourly_rate"], 35.0)
+
+    def test_post_roi_settings_rejects_non_dict_body(self):
+        body = json.dumps([1, 2, 3]).encode("utf-8")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/api/roi-settings", data=body, method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                status = resp.status
+        except urllib.error.HTTPError as e:
+            status = e.code
+        self.assertEqual(status, 400)
 
     def test_unknown_path_falls_back_to_index_html(self):
         status, body = self._get("/some/spa/route")

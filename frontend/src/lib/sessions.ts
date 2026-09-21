@@ -7,7 +7,7 @@ export interface FlatSession extends SessionDetailEntry {
 }
 
 /** Fuentes con sessions_detail comparable — OpenRouter queda fuera (agrega por modelo, no por sesión). */
-export const SESSION_SOURCES = ["claude_code", "codex", "opencode"] as const;
+export const SESSION_SOURCES = ["claude_code", "codex", "opencode", "hermes"] as const;
 
 export function collectSessions(
   sources: UsageSnapshot["sources"] | null | undefined,
@@ -17,7 +17,7 @@ export function collectSessions(
   if (!sources) return [];
   const sourceKeys = section === "all"
     ? SESSION_SOURCES
-    : section === "openrouter" ? [] : ([section] as const);
+    : section === "openrouter" || section === "roi" ? [] : ([section] as const);
 
   const rows: FlatSession[] = [];
   for (const key of sourceKeys) {
@@ -29,4 +29,17 @@ export function collectSessions(
     }
   }
   return rows;
+}
+
+/** claude_code usa timestamps ISO (string); codex usa epoch en segundos (number). */
+function toEpochMs(ts: string | number | null): number | null {
+  if (ts === null) return null;
+  return typeof ts === "number" ? ts * 1000 : new Date(ts).getTime();
+}
+
+export function sessionDurationSeconds(session: SessionDetailEntry): number {
+  const start = toEpochMs(session.first_ts);
+  const end = toEpochMs(session.last_ts);
+  if (start === null || end === null || end < start) return 0;
+  return (end - start) / 1000;
 }

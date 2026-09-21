@@ -7,6 +7,7 @@ import { TrendChart } from "@/components/TrendChart";
 import { SessionDetail } from "@/components/SessionDetail";
 import { ProjectDetailSheet } from "@/components/ProjectDetailSheet";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { RoiView } from "@/components/RoiView";
 import type { ProjectUsage } from "@/lib/api";
 
 export default function App() {
@@ -17,7 +18,7 @@ export default function App() {
 
   const projectsForSection = (): Record<string, ProjectUsage> => {
     if (!sources || !combined) return {};
-    if (section === "all") return combined;
+    if (section === "all" || section === "roi") return combined;
     if (section === "openrouter") {
       const or = sources.openrouter;
       if (!or || or.unavailable || !or.models) return {};
@@ -40,7 +41,7 @@ export default function App() {
 
   const activeLabel = section === "all"
     ? "Vista general"
-    : { claude_code: "Claude Code", codex: "Codex", opencode: "OpenCode", openrouter: "OpenRouter" }[section];
+    : { claude_code: "Claude Code", codex: "Codex", opencode: "OpenCode", hermes: "Hermes", openrouter: "OpenRouter", roi: "ROI" }[section];
 
   return (
     <div className="min-h-screen flex bg-background text-foreground">
@@ -61,8 +62,14 @@ export default function App() {
           </div>
         </header>
         <main key={section} className="flex-1 p-6 space-y-6 max-w-[1400px] w-full">
+          {section === "roi" ? (
+            <div className="dashboard-section" style={{ animationDelay: "0ms" }}>
+              <RoiView sources={sources} />
+            </div>
+          ) : (
+          <>
           <div className="dashboard-section" style={{ animationDelay: "0ms" }}>
-            <TrendChart onSelectDate={setSelectedDate} />
+            <TrendChart section={section} onSelectDate={setSelectedDate} />
           </div>
           {openRouterUnavailable ? (
             <div className="dashboard-section rounded-xl border bg-card p-6 text-sm text-muted-foreground" style={{ animationDelay: "60ms" }}>
@@ -92,6 +99,8 @@ export default function App() {
                 </div>
               </>
             )
+          )}
+          </>
           )}
         </main>
       </div>

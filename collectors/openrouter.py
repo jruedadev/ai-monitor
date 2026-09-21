@@ -50,7 +50,7 @@ def collect(api_key=None, fetch=None, env_file_path=None):
 
         for row in response.get("data", []):
             model = row.get("model", "unknown")
-            date = row.get("date", "unknown")
+            date = str(row.get("date", "unknown"))[:10]
             cost = row.get("usage", 0.0) or 0.0
             tokens = (row.get("prompt_tokens", 0) or 0) + (row.get("completion_tokens", 0) or 0)
 

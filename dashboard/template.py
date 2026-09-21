@@ -51,7 +51,7 @@ const combined = __COMBINED__;
 
 const TAB_LABELS = {
   all: "Todo", claude_code: "Claude Code", codex: "Codex",
-  opencode: "OpenCode", openrouter: "OpenRouter",
+  opencode: "OpenCode", hermes: "Hermes", openrouter: "OpenRouter",
 };
 
 function fmtNum(n) { return (n || 0).toLocaleString(); }
@@ -99,7 +99,7 @@ function renderOpenRouter(data) {
 
 const tabsEl = document.getElementById('tabs');
 const panelsEl = document.getElementById('panels');
-const tabKeys = ['all', 'claude_code', 'codex', 'opencode', 'openrouter'];
+const tabKeys = ['all', 'claude_code', 'codex', 'opencode', 'hermes', 'openrouter'];
 
 tabKeys.forEach((key, i) => {
   const btn = document.createElement('button');

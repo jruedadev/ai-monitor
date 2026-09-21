@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { LineChart } from "@tremor/react";
+import { SOURCE_META } from "@/lib/sources";
+import type { SectionKey } from "@/components/Sidebar";
 
 interface DailyProjectRow {
   date: string;
@@ -9,23 +11,47 @@ interface DailyProjectRow {
   cost: number;
 }
 
+interface DailyModelRow {
+  date: string;
+  model: string;
+  tokens: number;
+  cost: number;
+}
+
 interface TrendChartProps {
+  section: SectionKey;
   onSelectDate?: (date: string) => void;
 }
 
-export function TrendChart({ onSelectDate }: TrendChartProps) {
+export function TrendChart({ section, onSelectDate }: TrendChartProps) {
   const [rows, setRows] = useState<DailyProjectRow[]>([]);
+  const [modelRows, setModelRows] = useState<DailyModelRow[]>([]);
 
   useEffect(() => {
     fetch("/api/history?days=90")
       .then((r) => r.json())
-      .then((data) => setRows(data.daily_project))
+      .then((data) => {
+        setRows(data.daily_project);
+        setModelRows(data.daily_model);
+      })
       .catch((err) => console.error("Error al cargar /api/history:", err));
   }, []);
 
+  if (section === "roi") return null;
+
   const byDate: Record<string, number> = {};
-  for (const row of rows) {
-    byDate[row.date] = (byDate[row.date] ?? 0) + row.tokens;
+  if (section === "openrouter") {
+    for (const row of modelRows) {
+      if (row.model !== "__all__") continue;
+      const date = row.date.slice(0, 10);
+      byDate[date] = (byDate[date] ?? 0) + row.tokens;
+    }
+  } else {
+    for (const row of rows) {
+      if (section !== "all" && row.source !== section) continue;
+      const date = row.date.slice(0, 10);
+      byDate[date] = (byDate[date] ?? 0) + row.tokens;
+    }
   }
 
   const dates = Object.keys(byDate).sort();
@@ -51,7 +77,10 @@ export function TrendChart({ onSelectDate }: TrendChartProps) {
   return (
     <div className="rounded-xl border bg-card p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 mb-4">
-        <h2 className="font-semibold">Tendencia de tokens (90 días)</h2>
+        <h2 className="font-semibold">
+          Tendencia de tokens (90 días)
+          {section !== "all" && SOURCE_META[section] ? ` — ${SOURCE_META[section].label}` : ""}
+        </h2>
         <div className="flex gap-5 text-sm text-muted-foreground">
           <span>Promedio/día activo <span className="text-foreground font-medium tabular-nums">{formatTokens(avg)}</span></span>
           <span>Pico <span className="text-foreground font-medium tabular-nums">{formatTokens(max)}</span></span>

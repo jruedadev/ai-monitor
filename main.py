@@ -11,16 +11,16 @@ import json
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from collectors import claude_code, codex, opencode, openrouter
+from collectors import claude_code, codex, opencode, openrouter, hermes
 from dashboard import template
 import history
 
 
-def combine_projects(claude_data, codex_data, opencode_data):
+def combine_projects(claude_data, codex_data, opencode_data, hermes_data):
     combined = defaultdict(lambda: {"total_tokens": 0, "cost": 0.0, "messages": 0,
                                      "session_count": 0, "by_source": []})
     for source_name, data in (("claude_code", claude_data), ("codex", codex_data),
-                               ("opencode", opencode_data)):
+                               ("opencode", opencode_data), ("hermes", hermes_data)):
         for project, v in data.items():
             c = combined[project]
             c["total_tokens"] += v.get("total_tokens", 0)
@@ -37,6 +37,7 @@ def collect_all(db_path=None):
         "claude_code": claude_code.collect(),
         "codex": codex.collect(),
         "opencode": opencode.collect(),
+        "hermes": hermes.collect(),
         "openrouter": openrouter.collect(),
     }
     history.record_snapshot(sources, db_path=db_path)
@@ -56,7 +57,7 @@ def print_table(sources, combined):
         print(f"{name:<{name_w}}  {v['total_tokens']:>12,}  {v['cost']:>10.2f}  {','.join(v['by_source']):>20}")
     print("-" * len(header))
     print(f"{'TOTAL':<{name_w}}  {total_tokens:>12,}  {total_cost:>10.2f}")
-    print("\n(Vista combinada: Claude Code + Codex + OpenCode. OpenRouter no se suma aquí — ver --html.)")
+    print("\n(Vista combinada: Claude Code + Codex + OpenCode + Hermes. OpenRouter no se suma aquí — ver --html.)")
 
     orr = sources.get("openrouter", {})
     if orr.get("unavailable"):
@@ -70,7 +71,7 @@ def main():
     args = ap.parse_args()
 
     sources = collect_all()
-    combined = combine_projects(sources["claude_code"], sources["codex"], sources["opencode"])
+    combined = combine_projects(sources["claude_code"], sources["codex"], sources["opencode"], sources["hermes"])
 
     if args.html:
         generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")

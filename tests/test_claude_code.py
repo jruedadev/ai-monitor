@@ -56,6 +56,55 @@ class TestClaudeCodeCollector(unittest.TestCase):
         self.assertEqual(proj["session_count"], 1)
         self.assertEqual(proj["sessions_detail"][0]["title"], "Mi tarea")
 
+    def test_title_captured_when_ai_title_comes_after_first_cwd(self):
+        self._write_session("sess1.jsonl", [
+            {
+                "type": "assistant", "cwd": "/home/user/DEV/demo",
+                "timestamp": "2026-08-01T10:00:00Z",
+                "message": {"model": "claude-sonnet-5", "usage": {"input_tokens": 1, "output_tokens": 1}},
+            },
+            {"type": "ai-title", "aiTitle": "Título tardío", "sessionId": "sess1"},
+        ])
+
+        data = claude_code.collect(projects_dir=self.tmp, db_path=self.db_path)
+
+        self.assertEqual(data["/home/user/DEV/demo"]["sessions_detail"][0]["title"], "Título tardío")
+
+    def test_latest_ai_title_wins_after_rename(self):
+        self._write_session("sess1.jsonl", [
+            {"type": "ai-title", "aiTitle": "Nombre viejo", "sessionId": "sess1"},
+            {
+                "type": "assistant", "cwd": "/home/user/DEV/demo",
+                "timestamp": "2026-08-01T10:00:00Z",
+                "message": {"model": "claude-sonnet-5", "usage": {"input_tokens": 1, "output_tokens": 1}},
+            },
+            {"type": "ai-title", "aiTitle": "Nombre nuevo", "sessionId": "sess1"},
+        ])
+
+        data = claude_code.collect(projects_dir=self.tmp, db_path=self.db_path)
+
+        self.assertEqual(data["/home/user/DEV/demo"]["sessions_detail"][0]["title"], "Nombre nuevo")
+
+    def test_sessions_detail_tracks_first_and_last_ts(self):
+        self._write_session("sess1.jsonl", [
+            {
+                "type": "assistant", "cwd": "/home/user/DEV/demo",
+                "timestamp": "2026-08-01T10:00:00Z",
+                "message": {"model": "claude-sonnet-5", "usage": {"input_tokens": 1, "output_tokens": 1}},
+            },
+            {
+                "type": "assistant", "cwd": "/home/user/DEV/demo",
+                "timestamp": "2026-08-01T10:30:00Z",
+                "message": {"model": "claude-sonnet-5", "usage": {"input_tokens": 1, "output_tokens": 1}},
+            },
+        ])
+
+        data = claude_code.collect(projects_dir=self.tmp, db_path=self.db_path)
+
+        sd = data["/home/user/DEV/demo"]["sessions_detail"][0]
+        self.assertEqual(sd["first_ts"], "2026-08-01T10:00:00Z")
+        self.assertEqual(sd["last_ts"], "2026-08-01T10:30:00Z")
+
     def test_missing_projects_dir_returns_empty_dict(self):
         data = claude_code.collect(projects_dir=os.path.join(self.tmp, "does-not-exist"), db_path=self.db_path)
         self.assertEqual(data, {})

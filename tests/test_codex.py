@@ -9,7 +9,7 @@ from collectors import codex, pricing
 SCHEMA = """
 CREATE TABLE threads (
     id TEXT, cwd TEXT, model TEXT, tokens_used INTEGER,
-    created_at INTEGER, title TEXT
+    created_at INTEGER, updated_at INTEGER, title TEXT
 );
 """
 
@@ -21,8 +21,8 @@ class TestCodexCollector(unittest.TestCase):
         con = sqlite3.connect(self.tmp.name)
         con.execute(SCHEMA)
         con.execute(
-            "INSERT INTO threads (id, cwd, model, tokens_used, created_at, title) VALUES (?,?,?,?,?,?)",
-            ("t1", "/home/user/DEV/demo", "gpt-5.5", 26392, 1781898850, "Prueba de comunicación"),
+            "INSERT INTO threads (id, cwd, model, tokens_used, created_at, updated_at, title) VALUES (?,?,?,?,?,?,?)",
+            ("t1", "/home/user/DEV/demo", "gpt-5.5", 26392, 1781898850, 1781900000, "Prueba de comunicación"),
         )
         con.commit()
         con.close()
@@ -47,6 +47,13 @@ class TestCodexCollector(unittest.TestCase):
         self.assertEqual(proj["session_count"], 1)
         self.assertEqual(proj["sessions_detail"][0]["title"], "Prueba de comunicación")
         self.assertGreater(proj["cost"], 0)
+
+    def test_sessions_detail_exposes_first_and_last_ts_from_created_and_updated_at(self):
+        data = codex.collect(state_db_path=self.tmp.name, db_path=self.db_path)
+
+        sd = data["/home/user/DEV/demo"]["sessions_detail"][0]
+        self.assertEqual(sd["first_ts"], 1781898850)
+        self.assertEqual(sd["last_ts"], 1781900000)
 
     def test_missing_db_file_returns_empty_dict(self):
         data = codex.collect(state_db_path="/nonexistent/path/state_5.sqlite", db_path=self.db_path)

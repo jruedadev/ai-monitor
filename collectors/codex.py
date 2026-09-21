@@ -18,7 +18,7 @@ def collect(state_db_path=None, db_path=None):
         con = sqlite3.connect(state_db_path)
         con.row_factory = sqlite3.Row
         cur = con.cursor()
-        cur.execute("SELECT id, cwd, model, tokens_used, created_at, title FROM threads")
+        cur.execute("SELECT id, cwd, model, tokens_used, created_at, updated_at, title FROM threads")
         rows = cur.fetchall()
         con.close()
     except sqlite3.Error:
@@ -62,7 +62,8 @@ def collect(state_db_path=None, db_path=None):
                 "tokens": tokens_used,
                 "cost": round(cost, 4),
                 "title": row["title"],
-                "last_ts": row["created_at"],
+                "first_ts": row["created_at"],
+                "last_ts": row["updated_at"] or row["created_at"],
                 "cwd": cwd,
                 "date": day,
             })

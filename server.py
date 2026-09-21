@@ -20,7 +20,7 @@ _state = {"sources": {}, "combined": {}}
 
 def _recompute_and_maybe_publish(broker):
     sources = main.collect_all()
-    combined = main.combine_projects(sources["claude_code"], sources["codex"], sources["opencode"])
+    combined = main.combine_projects(sources["claude_code"], sources["codex"], sources["opencode"], sources["hermes"])
     payload = json.dumps({"sources": sources, "combined": combined}, sort_keys=True)
 
     with _state_lock:
@@ -66,10 +66,34 @@ def make_handler(static_dir, broker, db_path=None):
                 except ValueError:
                     days = 90
                 self._send_json(json.dumps(history.query_history(days=days, db_path=db_path)))
+            elif parsed.path == "/api/roi-settings":
+                self._send_json(json.dumps(history.get_roi_settings(db_path=db_path)))
             elif parsed.path == "/api/stream":
                 self._handle_sse()
             else:
                 self._serve_static(parsed.path)
+
+        def do_POST(self):
+            parsed = urlparse(self.path)
+
+            if parsed.path == "/api/roi-settings":
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length)
+                try:
+                    settings = json.loads(body)
+                except json.JSONDecodeError:
+                    self.send_response(400)
+                    self.end_headers()
+                    return
+                if not isinstance(settings, dict):
+                    self.send_response(400)
+                    self.end_headers()
+                    return
+                history.save_roi_settings(settings, db_path=db_path)
+                self._send_json(json.dumps(history.get_roi_settings(db_path=db_path)))
+            else:
+                self.send_response(404)
+                self.end_headers()
 
         def _send_json(self, body):
             encoded = body.encode("utf-8")
