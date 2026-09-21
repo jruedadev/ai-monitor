@@ -9,43 +9,73 @@ import { ProjectDetailSheet } from "@/components/ProjectDetailSheet";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RoiView } from "@/components/RoiView";
 import type { ProjectUsage } from "@/lib/api";
+import { clientOf, groupProjectsByClient } from "@/lib/clients";
 
 export default function App() {
   const [section, setSection] = useState<SectionKey>("all");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [clientFilter, setClientFilter] = useState<string | null>(null);
   const { sources, combined, connected } = useUsageStream();
+
+  const projectsByClient = groupProjectsByClient(Object.keys(combined ?? {}));
+
+  const handleSelectClient = (client: string | null) => {
+    setClientFilter(client);
+    if (client) setSection("all");
+  };
 
   const projectsForSection = (): Record<string, ProjectUsage> => {
     if (!sources || !combined) return {};
-    if (section === "all" || section === "roi") return combined;
-    if (section === "openrouter") {
+
+    let result: Record<string, ProjectUsage>;
+    if (section === "all" || section === "roi") {
+      result = combined;
+    } else if (section === "openrouter") {
       const or = sources.openrouter;
       if (!or || or.unavailable || !or.models) return {};
-      return Object.fromEntries(
+      result = Object.fromEntries(
         Object.entries(or.models).map(([model, v]) => [
           model,
           { total_tokens: v.tokens, cost: v.cost, messages: v.requests, session_count: v.requests, by_source: ["openrouter"] },
         ]),
       );
+    } else {
+      result = Object.fromEntries(
+        Object.entries(sources[section]).map(([name, v]) => [
+          name,
+          { total_tokens: v.total_tokens, cost: v.cost, messages: v.messages, session_count: v.session_count, by_source: [section] },
+        ]),
+      );
     }
-    return Object.fromEntries(
-      Object.entries(sources[section]).map(([name, v]) => [
-        name,
-        { total_tokens: v.total_tokens, cost: v.cost, messages: v.messages, session_count: v.session_count, by_source: [section] },
-      ]),
-    );
+
+    if (clientFilter && section !== "roi") {
+      result = Object.fromEntries(
+        Object.entries(result).filter(([path]) => clientOf(path) === clientFilter),
+      );
+    }
+
+    return result;
   };
 
   const openRouterUnavailable = section === "openrouter" && sources?.openrouter?.unavailable;
 
-  const activeLabel = section === "all"
-    ? "Vista general"
-    : { claude_code: "Claude Code", codex: "Codex", opencode: "OpenCode", hermes: "Hermes", openrouter: "OpenRouter", roi: "ROI" }[section];
+  const activeLabel = clientFilter
+    ? `Proyectos — ${clientFilter}`
+    : section === "all"
+      ? "Vista general"
+      : { claude_code: "Claude Code", codex: "Codex", opencode: "OpenCode", hermes: "Hermes", openrouter: "OpenRouter", roi: "ROI" }[section];
 
   return (
     <div className="min-h-screen flex bg-background text-foreground">
-      <Sidebar active={section} onSelect={setSection} />
+      <Sidebar
+        active={section}
+        onSelect={setSection}
+        projectsByClient={projectsByClient}
+        activeClient={clientFilter}
+        onSelectClient={handleSelectClient}
+        onSelectProject={setSelectedProject}
+      />
       <div className="flex-1 flex flex-col min-w-0">
         <header className="sticky top-0 z-10 flex items-center justify-between px-6 h-16 border-b bg-background/80 backdrop-blur">
           <h1 className="text-lg font-semibold">{activeLabel}</h1>
@@ -69,7 +99,7 @@ export default function App() {
           ) : (
           <>
           <div className="dashboard-section" style={{ animationDelay: "0ms" }}>
-            <TrendChart section={section} onSelectDate={setSelectedDate} />
+            <TrendChart section={section} clientFilter={clientFilter} onSelectDate={setSelectedDate} />
           </div>
           {openRouterUnavailable ? (
             <div className="dashboard-section rounded-xl border bg-card p-6 text-sm text-muted-foreground" style={{ animationDelay: "60ms" }}>
@@ -92,6 +122,7 @@ export default function App() {
                   <SessionDetail
                     sources={sources}
                     section={section}
+                    clientFilter={clientFilter}
                     selectedDate={selectedDate}
                     onSelectDate={setSelectedDate}
                     onSelectProject={setSelectedProject}
