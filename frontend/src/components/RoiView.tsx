@@ -273,6 +273,12 @@ function SourceRoiCard({
       })
     : [];
 
+  const apiCostScoped = subscriptionStart
+    ? monthly.reduce((sum, m) => sum + m.apiCostMonth, 0)
+    : apiCost;
+  const subscriptionTotalCost =
+    subscriptionStart && subscriptionCost !== null ? subscriptionCost * monthly.length : subscriptionCost;
+
   return (
     <div className="rounded-xl border bg-card p-5 space-y-3">
       <div className="flex items-center gap-2">
@@ -280,15 +286,22 @@ function SourceRoiCard({
         <h3 className="text-sm font-medium">{meta.label}</h3>
       </div>
 
-      <Row label="Costo real (API)" value={formatUsd(apiCost)} />
       <Row
-        label="Costo suscripción"
-        value={subscriptionCost !== null ? formatUsd(subscriptionCost) : "—"}
+        label={subscriptionStart ? `Costo real (API) desde ${subscriptionStart}` : "Costo real (API)"}
+        value={formatUsd(apiCostScoped)}
       />
-      {subscriptionCost !== null && (
+      <Row
+        label={
+          subscriptionStart
+            ? `Costo suscripción (${monthly.length} ${monthly.length === 1 ? "mes" : "meses"})`
+            : "Costo suscripción"
+        }
+        value={subscriptionTotalCost !== null ? formatUsd(subscriptionTotalCost) : "—"}
+      />
+      {subscriptionTotalCost !== null && (
         <Row
-          label={apiCost <= subscriptionCost ? "Ahorro vs. suscripción" : "Sobrecosto vs. suscripción"}
-          value={formatUsd(Math.abs(subscriptionCost - apiCost))}
+          label={apiCostScoped <= subscriptionTotalCost ? "Ahorro vs. suscripción" : "Sobrecosto vs. suscripción"}
+          value={formatUsd(Math.abs(subscriptionTotalCost - apiCostScoped))}
           emphasize
         />
       )}
