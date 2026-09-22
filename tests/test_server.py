@@ -78,7 +78,13 @@ class TestServerAPI(unittest.TestCase):
         data = json.loads(body)
         self.assertEqual(
             data,
-            {"subscription_cost_claude": None, "subscription_cost_codex": None, "hourly_rate": None},
+            {
+                "subscription_cost_claude": None,
+                "subscription_cost_codex": None,
+                "hourly_rate": None,
+                "subscription_start_claude": None,
+                "subscription_start_codex": None,
+            },
         )
 
     def test_post_roi_settings_persists_and_get_reflects_it(self):

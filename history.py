@@ -30,7 +30,13 @@ CREATE TABLE IF NOT EXISTS roi_settings (
 );
 """
 
-ROI_SETTINGS_KEYS = ("subscription_cost_claude", "subscription_cost_codex", "hourly_rate")
+ROI_SETTINGS_KEYS = (
+    "subscription_cost_claude",
+    "subscription_cost_codex",
+    "hourly_rate",
+    "subscription_start_claude",
+    "subscription_start_codex",
+)
 
 
 def ensure_schema(db_path):

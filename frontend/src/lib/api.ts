@@ -53,6 +53,21 @@ export interface RoiSettings {
   subscription_cost_claude: number | null;
   subscription_cost_codex: number | null;
   hourly_rate: number | null;
+  subscription_start_claude: string | null;
+  subscription_start_codex: string | null;
+}
+
+export interface DailyProjectRow {
+  date: string;
+  source: string;
+  project: string;
+  tokens: number;
+  cost: number | null;
+}
+
+export async function fetchHistory(days: number): Promise<{ daily_project: DailyProjectRow[] }> {
+  const res = await fetch(`/api/history?days=${days}`);
+  return res.json();
 }
 
 export async function fetchRoiSettings(): Promise<RoiSettings> {

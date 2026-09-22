@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
-import { fetchRoiSettings, saveRoiSettings, type RoiSettings, type UsageSnapshot } from "@/lib/api";
+import {
+  fetchHistory,
+  fetchRoiSettings,
+  saveRoiSettings,
+  type DailyProjectRow,
+  type RoiSettings,
+  type UsageSnapshot,
+} from "@/lib/api";
 import { collectSessions, sessionDurationSeconds } from "@/lib/sessions";
 import { SOURCE_META } from "@/lib/sources";
 import { clientOf, groupProjectsByClient } from "@/lib/clients";
@@ -12,13 +19,49 @@ interface RoiViewProps {
 const ROI_SOURCES = ["claude_code", "codex"] as const;
 type RoiSource = (typeof ROI_SOURCES)[number];
 
-const SUBSCRIPTION_KEY: Record<RoiSource, keyof RoiSettings> = {
+const SUBSCRIPTION_KEY: Record<RoiSource, "subscription_cost_claude" | "subscription_cost_codex"> = {
   claude_code: "subscription_cost_claude",
   codex: "subscription_cost_codex",
 };
 
+const SUBSCRIPTION_START_KEY: Record<RoiSource, "subscription_start_claude" | "subscription_start_codex"> = {
+  claude_code: "subscription_start_claude",
+  codex: "subscription_start_codex",
+};
+
 function formatUsd(value: number) {
   return `$${value.toFixed(2)}`;
+}
+
+function monthKey(date: string): string {
+  return date.slice(0, 7);
+}
+
+function monthLabel(key: string): string {
+  const [year, month] = key.split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString("es-ES", { year: "numeric", month: "long" });
+}
+
+/** Genera las claves YYYY-MM desde `start` (inclusive) hasta hoy (inclusive). */
+function monthRange(start: string): string[] {
+  const startKey = monthKey(start);
+  const [startYear, startMonth] = startKey.split("-").map(Number);
+  const now = new Date();
+  const endYear = now.getFullYear();
+  const endMonth = now.getMonth() + 1;
+
+  const keys: string[] = [];
+  let year = startYear;
+  let month = startMonth;
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    keys.push(`${year}-${String(month).padStart(2, "0")}`);
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+  return keys;
 }
 
 export function RoiView({ sources }: RoiViewProps) {
@@ -26,6 +69,7 @@ export function RoiView({ sources }: RoiViewProps) {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [scopeFilter, setScopeFilter] = useState<string>("");
+  const [historyRows, setHistoryRows] = useState<DailyProjectRow[]>([]);
 
   useEffect(() => {
     fetchRoiSettings().then((s) => {
@@ -34,9 +78,26 @@ export function RoiView({ sources }: RoiViewProps) {
         subscription_cost_claude: s.subscription_cost_claude?.toString() ?? "",
         subscription_cost_codex: s.subscription_cost_codex?.toString() ?? "",
         hourly_rate: s.hourly_rate?.toString() ?? "",
+        subscription_start_claude: s.subscription_start_claude ?? "",
+        subscription_start_codex: s.subscription_start_codex ?? "",
       });
     });
   }, []);
+
+  const earliestStart = [settings?.subscription_start_claude, settings?.subscription_start_codex]
+    .filter((d): d is string => Boolean(d))
+    .sort()[0];
+
+  useEffect(() => {
+    if (!earliestStart) {
+      setHistoryRows([]);
+      return;
+    }
+    const days = Math.ceil((Date.now() - new Date(earliestStart).getTime()) / 86_400_000) + 1;
+    fetchHistory(Math.max(days, 1))
+      .then((data) => setHistoryRows(data.daily_project))
+      .catch((err) => console.error("Error al cargar /api/history para ROI:", err));
+  }, [earliestStart]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -44,6 +105,8 @@ export function RoiView({ sources }: RoiViewProps) {
       subscription_cost_claude: draft.subscription_cost_claude ? Number(draft.subscription_cost_claude) : null,
       subscription_cost_codex: draft.subscription_cost_codex ? Number(draft.subscription_cost_codex) : null,
       hourly_rate: draft.hourly_rate ? Number(draft.hourly_rate) : null,
+      subscription_start_claude: draft.subscription_start_claude || null,
+      subscription_start_codex: draft.subscription_start_codex || null,
     };
     const updated = await saveRoiSettings(payload);
     setSettings(updated);
@@ -106,6 +169,18 @@ export function RoiView({ sources }: RoiViewProps) {
             onChange={(v) => setDraft((d) => ({ ...d, hourly_rate: v }))}
           />
         </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <DateField
+            label="Inicio suscripción Claude"
+            value={draft.subscription_start_claude}
+            onChange={(v) => setDraft((d) => ({ ...d, subscription_start_claude: v }))}
+          />
+          <DateField
+            label="Inicio suscripción Codex"
+            value={draft.subscription_start_codex}
+            onChange={(v) => setDraft((d) => ({ ...d, subscription_start_codex: v }))}
+          />
+        </div>
         <button
           onClick={handleSave}
           disabled={saving}
@@ -118,7 +193,14 @@ export function RoiView({ sources }: RoiViewProps) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {ROI_SOURCES.map((source) => (
-          <SourceRoiCard key={source} source={source} sources={sources} settings={settings} matchesScope={matchesScope} />
+          <SourceRoiCard
+            key={source}
+            source={source}
+            sources={sources}
+            settings={settings}
+            matchesScope={matchesScope}
+            historyRows={historyRows}
+          />
         ))}
       </div>
     </div>
@@ -142,16 +224,32 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
   );
 }
 
+function DateField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="space-y-1.5 block">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+      />
+    </label>
+  );
+}
+
 function SourceRoiCard({
   source,
   sources,
   settings,
   matchesScope,
+  historyRows,
 }: {
   source: RoiSource;
   sources: UsageSnapshot["sources"] | null;
   settings: RoiSettings;
   matchesScope: (path: string) => boolean;
+  historyRows: DailyProjectRow[];
 }) {
   const meta = SOURCE_META[source];
   const projects = sources?.[source] ?? {};
@@ -159,11 +257,21 @@ function SourceRoiCard({
     .filter(([path]) => matchesScope(path))
     .reduce((sum, [, p]) => sum + p.cost, 0);
   const subscriptionCost = settings[SUBSCRIPTION_KEY[source]];
+  const subscriptionStart = settings[SUBSCRIPTION_START_KEY[source]];
 
   const sessions = collectSessions(sources, source).filter((s) => matchesScope(s.project));
   const totalHours = sessions.reduce((sum, s) => sum + sessionDurationSeconds(s), 0) / 3600;
   const hourlyRate = settings.hourly_rate;
   const valueGenerated = hourlyRate !== null ? totalHours * hourlyRate : null;
+
+  const monthly = subscriptionStart
+    ? monthRange(subscriptionStart).map((key) => {
+        const apiCostMonth = historyRows
+          .filter((row) => row.source === source && monthKey(row.date) === key && matchesScope(row.project))
+          .reduce((sum, row) => sum + (row.cost ?? 0), 0);
+        return { key, apiCostMonth };
+      })
+    : [];
 
   return (
     <div className="rounded-xl border bg-card p-5 space-y-3">
@@ -198,6 +306,41 @@ function SourceRoiCard({
           value={apiCost > 0 ? `${(valueGenerated / apiCost).toFixed(1)}x` : "—"}
           emphasize
         />
+      )}
+
+      {monthly.length > 0 && (
+        <>
+          <div className="h-px bg-border my-1" />
+          <div className="space-y-1.5">
+            <span className="text-xs text-muted-foreground">Desglose mensual desde {subscriptionStart}</span>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-muted-foreground text-left">
+                  <th className="font-normal py-1">Mes</th>
+                  <th className="font-normal py-1 text-right">Costo API</th>
+                  <th className="font-normal py-1 text-right">Suscripción</th>
+                  <th className="font-normal py-1 text-right">Diferencia</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthly.map(({ key, apiCostMonth }) => (
+                  <tr key={key} className="tabular-nums">
+                    <td className="py-0.5 capitalize">{monthLabel(key)}</td>
+                    <td className="py-0.5 text-right">{formatUsd(apiCostMonth)}</td>
+                    <td className="py-0.5 text-right">
+                      {subscriptionCost !== null ? formatUsd(subscriptionCost) : "—"}
+                    </td>
+                    <td className="py-0.5 text-right">
+                      {subscriptionCost !== null
+                        ? formatUsd(Math.abs(subscriptionCost - apiCostMonth))
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
