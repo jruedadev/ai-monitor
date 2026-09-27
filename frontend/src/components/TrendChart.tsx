@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { LineChart } from "@tremor/react";
 import { SOURCE_META } from "@/lib/sources";
 import { clientOf } from "@/lib/clients";
+import { formatCompact } from "@/lib/format";
 import type { SectionKey } from "@/components/Sidebar";
 
 interface DailyProjectRow {
@@ -71,9 +72,6 @@ export function TrendChart({ section, onSelectDate, clientFilter }: TrendChartPr
     }
   }
 
-  const formatTokens = (value: number) =>
-    new Intl.NumberFormat("es", { notation: "compact", maximumFractionDigits: 1 }).format(value);
-
   const nonZero = chartData.filter((d) => d.Tokens > 0);
   const avg = nonZero.length ? nonZero.reduce((s, d) => s + d.Tokens, 0) / nonZero.length : 0;
   const max = chartData.reduce((m, d) => Math.max(m, d.Tokens), 0);
@@ -87,8 +85,8 @@ export function TrendChart({ section, onSelectDate, clientFilter }: TrendChartPr
           {section !== "all" && SOURCE_META[section] ? ` — ${SOURCE_META[section].label}` : ""}
         </h2>
         <div className="flex gap-5 text-sm text-muted-foreground">
-          <span>Promedio/día activo <span className="text-foreground font-medium tabular-nums">{formatTokens(avg)}</span></span>
-          <span>Pico <span className="text-foreground font-medium tabular-nums">{formatTokens(max)}</span></span>
+          <span>Promedio/día activo <span className="text-foreground font-medium tabular-nums">{formatCompact(avg)}</span></span>
+          <span>Pico <span className="text-foreground font-medium tabular-nums">{formatCompact(max)}</span></span>
           <span>Días activos <span className="text-foreground font-medium tabular-nums">{activeDays}/{chartData.length}</span></span>
         </div>
       </div>
@@ -97,7 +95,7 @@ export function TrendChart({ section, onSelectDate, clientFilter }: TrendChartPr
         index="date"
         categories={["Tokens"]}
         colors={["blue"]}
-        valueFormatter={formatTokens}
+        valueFormatter={formatCompact}
         yAxisWidth={64}
         showLegend={false}
         className="ai-monitor-trendchart h-64 mt-4 cursor-pointer"

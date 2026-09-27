@@ -13,6 +13,8 @@ export function useTheme() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
+    // Scrollbars, <select> e <input type="date"> nativos siguen al tema elegido, no al del SO.
+    document.documentElement.style.colorScheme = theme;
     localStorage.setItem("ai-monitor-theme", theme);
   }, [theme]);
 

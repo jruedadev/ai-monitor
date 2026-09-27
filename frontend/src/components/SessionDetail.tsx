@@ -8,6 +8,7 @@ import { SessionIdentity } from "@/components/SessionIdentity";
 import type { SectionKey } from "@/components/Sidebar";
 import type { UsageSnapshot } from "@/lib/api";
 import { clientOf } from "@/lib/clients";
+import { formatInt, formatUsd } from "@/lib/format";
 
 interface SessionDetailProps {
   sources: UsageSnapshot["sources"] | null | undefined;
@@ -47,11 +48,12 @@ export function SessionDetail({
     <div>
       <div className="flex items-center justify-end gap-4 mb-4">
         <select
+          aria-label="Filtrar sesiones por fecha"
           className="text-sm border rounded-md px-2 py-1.5 bg-background"
           value={selectedDate ?? ""}
           onChange={(e) => onSelectDate(e.target.value || null)}
         >
-          <option value="">Todas las fechas ({allSessions.length})</option>
+          <option value="">Todas las fechas ({formatInt(allSessions.length)})</option>
           {availableDates.map((d) => (
             <option key={d} value={d}>{d}</option>
           ))}
@@ -69,7 +71,7 @@ export function SessionDetail({
             return (
               <Fragment key={source}>
                 <div className="flex items-center gap-2 mb-2">
-                  {Icon && <Icon className="h-4 w-4" style={{ color: meta.color }} />}
+                  {Icon && <Icon className="h-4 w-4" style={{ color: meta.color }} aria-hidden />}
                   <h3 className="text-sm font-semibold">{meta?.label ?? source}</h3>
                   <span className="text-xs text-muted-foreground">({rows.length})</span>
                 </div>
@@ -89,7 +91,7 @@ export function SessionDetail({
                           <TableCell className="max-w-xs">
                             {onSelectProject ? (
                               <button
-                                className="truncate text-left hover:underline underline-offset-2"
+                                className="block max-w-full truncate rounded-sm text-left cursor-pointer hover:underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                                 title={s.project}
                                 onClick={() => onSelectProject(s.project)}
                               >
@@ -102,8 +104,8 @@ export function SessionDetail({
                           <TableCell className="max-w-sm">
                             <SessionIdentity title={s.title} sessionId={s.session_id} />
                           </TableCell>
-                          <TableCell className="text-right tabular-nums">{s.tokens.toLocaleString("es")}</TableCell>
-                          <TableCell className="text-right tabular-nums">${s.cost.toFixed(2)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatInt(s.tokens)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatUsd(s.cost)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

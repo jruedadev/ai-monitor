@@ -47,10 +47,10 @@ export function Sidebar({
   };
 
   return (
-    <nav className="w-56 shrink-0 border-r bg-sidebar flex flex-col overflow-y-auto">
+    <nav aria-label="Navegación principal" className="w-56 shrink-0 border-r bg-sidebar flex flex-col overflow-y-auto">
       <div className="flex items-center gap-2 px-5 h-16 border-b">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Activity className="h-4 w-4" />
+          <Activity className="h-4 w-4" aria-hidden />
         </div>
         <span className="font-semibold tracking-tight">ai-monitor</span>
       </div>
@@ -66,9 +66,10 @@ export function Sidebar({
               <button
                 key={s.key}
                 onClick={() => { onSelect(s.key); onSelectClient(null); }}
+                aria-current={isActive ? "page" : undefined}
                 className={navButtonClass(isActive)}
               >
-                <Icon className="h-4 w-4 shrink-0" style={{ color: isActive ? s.color : undefined }} />
+                <Icon className="h-4 w-4 shrink-0" style={{ color: isActive ? s.color : undefined }} aria-hidden />
                 {s.label}
               </button>
             );
@@ -89,12 +90,15 @@ export function Sidebar({
                 <div key={client}>
                   <button
                     onClick={() => handleSelectClient(client)}
+                    aria-current={isActive ? "page" : undefined}
+                    aria-expanded={isExpanded}
                     className={navButtonClass(isActive) + " gap-2"}
                   >
                     <ChevronRight
+                      aria-hidden
                       className={`h-3.5 w-3.5 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
                     />
-                    <FolderKanban className="h-4 w-4 shrink-0" />
+                    <FolderKanban className="h-4 w-4 shrink-0" aria-hidden />
                     <span className="truncate">{client}</span>
                   </button>
                   {isExpanded && (
@@ -123,9 +127,11 @@ export function Sidebar({
           </p>
           <button
             onClick={() => { onSelect(ROI_ITEM.key); onSelectClient(null); }}
+            aria-current={active === ROI_ITEM.key ? "page" : undefined}
             className={navButtonClass(active === ROI_ITEM.key)}
           >
             <ROI_ITEM.icon
+              aria-hidden
               className="h-4 w-4 shrink-0"
               style={{ color: active === ROI_ITEM.key ? ROI_ITEM.color : undefined }}
             />

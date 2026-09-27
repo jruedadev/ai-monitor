@@ -81,12 +81,14 @@ export default function App() {
           <h1 className="text-lg font-semibold">{activeLabel}</h1>
           <div className="flex items-center gap-3">
             <span
+              role="status"
+              aria-live="polite"
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
                 connected ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground"
               }`}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`} />
-              {connected ? "En vivo" : "Conectando..."}
+              <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`} />
+              {connected ? "En vivo" : "Conectando…"}
             </span>
             <ThemeToggle />
           </div>

@@ -11,6 +11,7 @@ import {
 import { collectSessions, sessionDurationSeconds } from "@/lib/sessions";
 import { SOURCE_META } from "@/lib/sources";
 import { clientOf, groupProjectsByClient } from "@/lib/clients";
+import { formatDecimal, formatUsd } from "@/lib/format";
 
 interface RoiViewProps {
   sources: UsageSnapshot["sources"] | null;
@@ -28,10 +29,6 @@ const SUBSCRIPTION_START_KEY: Record<RoiSource, "subscription_start_claude" | "s
   claude_code: "subscription_start_claude",
   codex: "subscription_start_codex",
 };
-
-function formatUsd(value: number) {
-  return `$${value.toFixed(2)}`;
-}
 
 function monthKey(date: string): string {
   return date.slice(0, 7);
@@ -186,8 +183,8 @@ export function RoiView({ sources }: RoiViewProps) {
           disabled={saving}
           className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50"
         >
-          <Save className="h-4 w-4" />
-          {saving ? "Guardando..." : "Guardar"}
+          <Save className="h-4 w-4" aria-hidden />
+          {saving ? "Guardando…" : "Guardar"}
         </button>
       </div>
 
@@ -282,7 +279,7 @@ function SourceRoiCard({
   return (
     <div className="rounded-xl border bg-card p-5 space-y-3">
       <div className="flex items-center gap-2">
-        <meta.icon className="h-4 w-4" style={{ color: meta.color }} />
+        <meta.icon className="h-4 w-4" style={{ color: meta.color }} aria-hidden />
         <h3 className="text-sm font-medium">{meta.label}</h3>
       </div>
 
@@ -308,7 +305,7 @@ function SourceRoiCard({
 
       <div className="h-px bg-border my-1" />
 
-      <Row label="Horas de sesión" value={totalHours.toFixed(1)} />
+      <Row label="Horas de sesión" value={formatDecimal(totalHours)} />
       <Row
         label="Valor generado"
         value={valueGenerated !== null ? formatUsd(valueGenerated) : "—"}
@@ -316,7 +313,7 @@ function SourceRoiCard({
       {valueGenerated !== null && (
         <Row
           label="ROI (valor / costo API)"
-          value={apiCost > 0 ? `${(valueGenerated / apiCost).toFixed(1)}x` : "—"}
+          value={apiCost > 0 ? `${formatDecimal(valueGenerated / apiCost)}x` : "—"}
           emphasize
         />
       )}
