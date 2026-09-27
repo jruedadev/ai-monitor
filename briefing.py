@@ -187,7 +187,130 @@ def top_projects(rows, limit=3):
 
 # --- Reglas de "Atención ahora" (Task 2) ---------------------------------------
 
-RULES = ()
+# Umbrales (spec §3.4). La línea base siempre es la propia de la fuente filtrada.
+SPIKE_FACTOR = 2.5
+SPIKE_MIN_ACTIVE_DAYS = 5
+CONCENTRATION_SHARE = 0.5
+SUBSCRIPTION_MIN_ACTIVE_DAYS = 3
+HABITUAL_WINDOW_DAYS = 30
+HABITUAL_MIN_SHARE = 0.4
+SILENT_MIN_DAYS = 3
+SILENT_GAP_FACTOR = 3
+
+
+def rule_spike_day(ctx):
+    per_day = {}
+    for r in ctx["window_rows"]:
+        per_day[r["date"]] = per_day.get(r["date"], 0.0) + (r["cost"] or 0)
+    active = {day: cost for day, cost in per_day.items() if cost > 0}
+    if len(active) < SPIKE_MIN_ACTIVE_DAYS:
+        return None
+    average = sum(active.values()) / len(active)
+    day, cost = max(active.items(), key=lambda kv: (kv[1], kv[0]))
+    if cost <= SPIKE_FACTOR * average:
+        return None
+    when = "Hoy llevas" if day == ctx["today"].isoformat() else f"El {format_day(day)} gastaste"
+    return {
+        "id": "spike_day", "severity": "warning",
+        "title": f"{when} {format_usd(cost)} — {format_ratio(cost / average)}× tu promedio diario",
+        "evidence": [f"{day}: {format_usd(cost)}", f"Promedio de días activos del mes: {format_usd(average)}"],
+        "link": f"/actividad?dia={day}",
+    }
+
+
+def rule_project_concentration(ctx):
+    if ctx["source"] == "openrouter":
+        return None
+    costs = _project_costs(ctx["window_rows"])
+    total = sum(costs.values())
+    if total <= 0:
+        return None
+    project, cost = max(costs.items(), key=lambda kv: (kv[1], kv[0]))
+    share = cost / total
+    if share <= CONCENTRATION_SHARE:
+        return None
+    name = project.rstrip("/").split("/")[-1] or project
+    return {
+        "id": "project_concentration", "severity": "info",
+        "title": f"{name} concentra el {round(share * 100)} % del gasto del mes",
+        "evidence": [f"{project}: {format_usd(cost)} de {format_usd(total)}"],
+        "link": f"/proyectos/{quote(client_of(project), safe='')}?proyecto={quote(project, safe='')}",
+    }
+
+
+def rule_cost_incomplete(ctx):
+    days = sorted({r["date"] for r in ctx["window_rows"] if r["cost"] is None})
+    if not days:
+        return None
+    shown = ", ".join(format_day(day) for day in days[:3]) + ("…" if len(days) > 3 else "")
+    return {
+        "id": "cost_incomplete", "severity": "info",
+        "title": "Hay consumo sin costo calculado este mes",
+        "evidence": [f"Días afectados: {shown}", "Esos consumos suman $ 0,00, así que el gasto real es mayor"],
+        "link": "/gasto",
+    }
+
+
+def rule_subscription_missing(ctx):
+    missing = []
+    for source in _subscription_candidates(ctx["source"]):
+        if ctx["settings"].get(SUBSCRIPTION_KEYS[source][0]) is not None:
+            continue
+        rows = in_range([r for r in ctx["project_rows"] if r["source"] == source], *ctx["window"])
+        days = len(active_dates(rows))
+        if days >= SUBSCRIPTION_MIN_ACTIVE_DAYS:
+            missing.append((source, days))
+    if not missing:
+        return None
+    labels = " y ".join(SOURCE_LABELS[source] for source, _ in missing)
+    return {
+        "id": "subscription_missing", "severity": "info",
+        "title": f"Configura tu plan de {labels} para comparar suscripción y API",
+        "evidence": [f"{SOURCE_LABELS[source]}: {days} días activos este mes, sin plan configurado"
+                     for source, days in missing],
+        "link": "/configuracion",
+    }
+
+
+def _silence(dates, today):
+    """(días en silencio, días activos en los 30 previos, umbral, último día) si la
+    fuente es habitual; None si es esporádica o no tiene datos."""
+    if not dates:
+        return None
+    last = date.fromisoformat(dates[-1])
+    since = last - timedelta(days=HABITUAL_WINDOW_DAYS - 1)
+    recent = [d for d in (date.fromisoformat(x) for x in dates) if d >= since]
+    if len(recent) / HABITUAL_WINDOW_DAYS < HABITUAL_MIN_SHARE:
+        return None
+    gaps = sorted((b - a).days for a, b in zip(recent, recent[1:]))
+    typical = gaps[len(gaps) // 2] if gaps else 1
+    threshold = max(SILENT_MIN_DAYS, SILENT_GAP_FACTOR * typical)
+    return (today - last).days, len(recent), threshold, last
+
+
+def rule_habitual_source_silent(ctx):
+    candidates = PROJECT_SOURCES if ctx["source"] == "all" else (ctx["source"],)
+    for source in candidates:
+        rows = rows_for_source(source, ctx["project_rows"], ctx["model_rows"])
+        info = _silence(active_dates(rows), ctx["today"])
+        if info is None:
+            continue
+        silent, active, threshold, last = info
+        if silent <= threshold:
+            continue
+        return {
+            "id": "habitual_source_silent", "severity": "warning",
+            "title": f"{SOURCE_LABELS[source]} lleva {silent} días sin datos",
+            "evidence": [f"Último día con actividad: {format_day(last.isoformat())}",
+                         f"Activa {active} de los {HABITUAL_WINDOW_DAYS} días previos; "
+                         f"se avisa después de {threshold} días sin datos"],
+            "link": f"/gasto?fuente={SOURCE_SLUGS[source]}",
+        }
+    return None
+
+
+RULES = (rule_spike_day, rule_project_concentration, rule_cost_incomplete,
+         rule_subscription_missing, rule_habitual_source_silent)
 MAX_SIGNALS = 3
 _SEVERITY_ORDER = {"warning": 0, "info": 1}
 

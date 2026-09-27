@@ -210,5 +210,107 @@ class TestClientOfParity(unittest.TestCase):
                 self.assertEqual(briefing.client_of(case["path"]), case["client"])
 
 
+def ids(data):
+    return [signal["id"] for signal in data["attention"]]
+
+
+def daily(first, last, **kwargs):
+    """Una fila por día entre dos fechas ISO, ambas inclusive."""
+    from datetime import timedelta
+    start, end = date.fromisoformat(first), date.fromisoformat(last)
+    out = []
+    while start <= end:
+        out.append(row(start.isoformat(), **kwargs))
+        start += timedelta(days=1)
+    return out
+
+
+class TestRules(unittest.TestCase):
+    def test_spike_day_fires_against_active_day_average(self):
+        rows = daily("2026-09-01", "2026-09-04", cost=10) + [row("2026-09-27", cost=100)]
+        data = build(rows, cfg=settings(subscription_cost_claude=20.0))
+        spike = data["attention"][0]
+        self.assertEqual(spike["id"], "spike_day")
+        self.assertEqual(spike["severity"], "warning")
+        self.assertEqual(spike["title"], "Hoy llevas $ 100,00 — 3,6× tu promedio diario")
+        self.assertEqual(spike["evidence"], ["2026-09-27: $ 100,00", "Promedio de días activos del mes: $ 28,00"])
+        self.assertEqual(spike["link"], "/actividad?dia=2026-09-27")
+
+    def test_spike_day_on_a_past_day_names_the_day(self):
+        rows = daily("2026-09-01", "2026-09-04", cost=10) + [row("2026-09-12", cost=100)]
+        spike = build(rows)["attention"][0]
+        self.assertTrue(spike["title"].startswith("El 12 sept gastaste $ 100,00"))
+
+    def test_spike_day_needs_five_active_days(self):
+        rows = daily("2026-09-01", "2026-09-03", cost=10) + [row("2026-09-27", cost=100)]
+        self.assertNotIn("spike_day", ids(build(rows)))
+
+    def test_spike_day_is_measured_within_the_source_filter(self):
+        rows = (daily("2026-09-01", "2026-09-06", source="codex", project="/home/u/DEV/X/c", cost=5)
+                + daily("2026-09-01", "2026-09-04", cost=10) + [row("2026-09-27", cost=500)])
+        self.assertNotIn("spike_day", ids(build(rows, source="codex")))
+        self.assertIn("spike_day", ids(build(rows, source="claude_code")))
+
+    def test_project_concentration(self):
+        rows = [row("2026-09-02", project="/home/u/DEV/ACME/app", cost=60),
+                row("2026-09-02", project="/home/u/DEV/ACME/web", cost=40)]
+        data = build(rows, cfg=settings(subscription_cost_claude=20.0))
+        signal = next(s for s in data["attention"] if s["id"] == "project_concentration")
+        self.assertEqual(signal["severity"], "info")
+        self.assertEqual(signal["title"], "app concentra el 60 % del gasto del mes")
+        self.assertEqual(signal["evidence"], ["/home/u/DEV/ACME/app: $ 60,00 de $ 100,00"])
+        self.assertEqual(signal["link"], "/proyectos/ACME?proyecto=%2Fhome%2Fu%2FDEV%2FACME%2Fapp")
+
+    def test_project_concentration_needs_more_than_half(self):
+        rows = [row("2026-09-02", project="/home/u/DEV/ACME/app", cost=50),
+                row("2026-09-02", project="/home/u/DEV/ACME/web", cost=50)]
+        self.assertNotIn("project_concentration", ids(build(rows)))
+
+    def test_cost_incomplete_signal(self):
+        data = build([row("2026-09-02", cost=None), row("2026-09-03", project="/home/u/DEV/B/x", cost=1),
+                      row("2026-09-03", project="/home/u/DEV/C/y", cost=1)])
+        signal = next(s for s in data["attention"] if s["id"] == "cost_incomplete")
+        self.assertEqual(signal["evidence"][0], "Días afectados: 2 sept")
+        self.assertEqual(signal["link"], "/gasto")
+
+    def test_subscription_missing_after_three_active_days(self):
+        self.assertIn("subscription_missing", ids(build(daily("2026-09-01", "2026-09-03"))))
+        self.assertNotIn("subscription_missing", ids(build(daily("2026-09-01", "2026-09-02"))))
+        self.assertNotIn("subscription_missing",
+                         ids(build(daily("2026-09-01", "2026-09-03"), cfg=settings(subscription_cost_claude=20.0))))
+        self.assertNotIn("subscription_missing", ids(build(
+            daily("2026-09-01", "2026-09-03", source="hermes"), source="hermes")))
+
+    def test_habitual_source_silent_fires(self):
+        rows = daily("2026-08-20", "2026-09-18")  # 30 días seguidos, luego 9 días sin datos
+        data = build(rows, cfg=settings(subscription_cost_claude=20.0))
+        signal = next(s for s in data["attention"] if s["id"] == "habitual_source_silent")
+        self.assertEqual(signal["severity"], "warning")
+        self.assertEqual(signal["title"], "Claude Code lleva 9 días sin datos")
+        self.assertEqual(signal["link"], "/gasto?fuente=claude-code")
+
+    def test_sporadic_source_never_fires_silent(self):
+        rows = daily("2026-08-20", "2026-09-27") + [row("2026-09-12", source="codex", project="/home/u/DEV/X/c")]
+        self.assertNotIn("habitual_source_silent", ids(build(rows, cfg=settings(subscription_cost_claude=20.0))))
+
+    def test_silence_threshold_scales_with_typical_interval(self):
+        every_other = [r for i, r in enumerate(daily("2026-08-22", "2026-09-20")) if i % 2 == 0]  # 15 días, intervalo 2
+        # último día activo 2026-09-19; umbral max(3, 3×2) = 6
+        not_yet = build(every_other, today=date(2026, 9, 25), cfg=settings(subscription_cost_claude=20.0))
+        self.assertNotIn("habitual_source_silent", ids(not_yet))
+        silent = build(every_other, today=date(2026, 9, 26), cfg=settings(subscription_cost_claude=20.0))
+        self.assertIn("habitual_source_silent", ids(silent))
+
+    def test_ordering_by_severity_and_max_three(self):
+        rows = (daily("2026-08-10", "2026-09-08", cost=1)  # Claude habitual, en silencio desde el 8
+                + [row("2026-09-05", project="/home/u/DEV/ACME/otro", cost=None),
+                   row("2026-09-20", source="codex", project="/home/u/DEV/BIG/app", cost=100)])
+        data = build(rows)
+        self.assertEqual(ids(data), ["spike_day", "habitual_source_silent", "project_concentration"])
+
+    def test_no_rows_no_signals(self):
+        self.assertEqual(build([])["attention"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
