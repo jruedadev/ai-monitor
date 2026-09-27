@@ -1,0 +1,9 @@
+[
+  {"path": "/home/u/DEV/JRDV/ai-monitor", "client": "JRDV"},
+  {"path": "/home/u/dev/Acme/app", "client": "Acme"},
+  {"path": "/home/u/Dev/Mixto/x", "client": "Mixto"},
+  {"path": "/srv/DEV/A/DEV/B/app", "client": "A"},
+  {"path": "/home/u/DEV", "client": "Otros"},
+  {"path": "/home/u/projects/app", "client": "Otros"},
+  {"path": "", "client": "Otros"}
+]

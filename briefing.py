@@ -1,0 +1,260 @@
+"""Briefing del Inicio: el mes en curso contra un mes comparable y las señales
+de "Atención ahora". No es un collector: solo lee history.db y nunca toca a los
+proveedores. Lógica en funciones puras sobre filas; SQLite en una capa delgada.
+Spec: docs/superpowers/specs/2026-09-27-inicio-briefing-design.md
+"""
+import calendar
+import math
+import re
+from datetime import date, timedelta
+from urllib.parse import quote
+
+PROJECT_SOURCES = ("claude_code", "codex", "opencode", "hermes")
+VALID_SOURCES = ("all",) + PROJECT_SOURCES + ("openrouter",)
+# Fuentes con suscripción posible → (clave de costo, clave de fecha de inicio) en roi_settings.
+SUBSCRIPTION_KEYS = {
+    "claude_code": ("subscription_cost_claude", "subscription_start_claude"),
+    "codex": ("subscription_cost_codex", "subscription_start_codex"),
+}
+SOURCE_LABELS = {"claude_code": "Claude Code", "codex": "Codex", "opencode": "OpenCode",
+                 "hermes": "Hermes", "openrouter": "OpenRouter"}
+SOURCE_SLUGS = {"claude_code": "claude-code", "codex": "codex", "opencode": "opencode",
+                "hermes": "hermes", "openrouter": "openrouter"}
+
+_MONTHS_SHORT = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic")
+_MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+class BriefingError(ValueError):
+    """Parámetro inválido; server.py lo traduce a HTTP 400."""
+
+
+# --- Formato: mismo resultado que frontend/src/lib/format.ts (es-CO) ---------
+
+def format_usd(value):
+    text = f"{abs(value):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    sign = "-" if value < 0 and text != "0,00" else ""
+    return f"{sign}$ {text}"
+
+
+def format_int(value):
+    return f"{int(value):,}".replace(",", ".")
+
+
+def format_ratio(value):
+    return f"{value:.1f}".replace(".", ",")
+
+
+def format_day(iso):
+    _, month, day = (int(part) for part in iso[:10].split("-"))
+    return f"{day} {_MONTHS_SHORT[month - 1]}"
+
+
+# --- Ventanas y cobertura ----------------------------------------------------
+
+def month_of(day):
+    return f"{day.year:04d}-{day.month:02d}"
+
+
+def previous_month(month):
+    year, mon = (int(part) for part in month.split("-"))
+    return f"{year - 1:04d}-12" if mon == 1 else f"{year:04d}-{mon - 1:02d}"
+
+
+def month_window(month, day):
+    """Del día 1 al `day` del mes; si el mes es más corto, se recorta a su último día."""
+    year, mon = (int(part) for part in month.split("-"))
+    last = calendar.monthrange(year, mon)[1]
+    return f"{month}-01", f"{month}-{min(day, last):02d}"
+
+
+def month_coverage(month, start):
+    """("full", None), ("partial", since) o None si el mes es anterior al inicio de datos."""
+    if start is None:
+        return None
+    if start <= f"{month}-01":
+        return ("full", None)
+    if start[:7] == month:
+        return ("partial", start)
+    return None
+
+
+def eligible_months(start, current_month):
+    if start is None:
+        return []
+    months = []
+    month = previous_month(current_month)
+    while month >= start[:7]:
+        coverage, since = month_coverage(month, start)
+        months.append({"month": month, "coverage": coverage, "since": since})
+        month = previous_month(month)
+    return months
+
+
+# --- Filas -------------------------------------------------------------------
+
+def rows_for_source(source, project_rows, model_rows):
+    if source == "openrouter":
+        return [{"date": r["date"][:10], "source": "openrouter", "project": None,
+                 "tokens": r["tokens"] or 0, "cost": r["cost"]}
+                for r in model_rows if r["model"] == "__all__"]
+    if source == "all":
+        return [r for r in project_rows if r["source"] in PROJECT_SOURCES]
+    return [r for r in project_rows if r["source"] == source]
+
+
+def in_range(rows, start, end):
+    return [r for r in rows if start <= r["date"] <= end]
+
+
+def sum_cost(rows):
+    return sum(r["cost"] or 0 for r in rows)
+
+
+def sum_tokens(rows):
+    return sum(r["tokens"] or 0 for r in rows)
+
+
+def active_dates(rows):
+    return sorted({r["date"] for r in rows if (r["tokens"] or 0) > 0 or (r["cost"] or 0) > 0})
+
+
+def delta_pct(current, previous):
+    if previous is None or previous == 0:
+        return None
+    return round((current - previous) / previous * 100, 1)
+
+
+# --- Suscripción frente a API -------------------------------------------------
+
+def compare_costs(api_cost, subscription_cost):
+    """Misma regla que compareCosts en frontend/src/lib/roi.ts (Math.round a centavos)."""
+    diff = api_cost - subscription_cost
+    cents = math.floor(diff * 100 + 0.5)
+    if cents == 0:
+        return "tie", 0.0
+    return ("subscription" if cents > 0 else "api"), abs(diff)
+
+
+def _subscription_candidates(source):
+    if source == "all":
+        return list(SUBSCRIPTION_KEYS)
+    return [source] if source in SUBSCRIPTION_KEYS else []
+
+
+def subscription_summary(source, project_rows, settings, window):
+    configured = [s for s in _subscription_candidates(source)
+                  if settings.get(SUBSCRIPTION_KEYS[s][0]) is not None]
+    if not configured:
+        return {"configured": False, "paid": None, "api_equivalent": None, "winner": None, "savings": None}
+    paid = sum(float(settings[SUBSCRIPTION_KEYS[s][0]]) for s in configured)
+    api = 0.0
+    for s in configured:
+        start = settings.get(SUBSCRIPTION_KEYS[s][1])
+        lower = max(window[0], str(start)[:10]) if start else window[0]
+        api += sum_cost(in_range([r for r in project_rows if r["source"] == s], lower, window[1]))
+    winner, savings = compare_costs(api, paid)
+    return {"configured": True, "paid": round(paid, 2), "api_equivalent": round(api, 2),
+            "winner": winner, "savings": round(savings, 2)}
+
+
+# --- Proyectos -----------------------------------------------------------------
+
+def client_of(path):
+    """Port de clientOf (frontend/src/lib/clients.ts): segmento tras "DEV" o "Otros"."""
+    segments = path.split("/")
+    for idx, segment in enumerate(segments):
+        if segment.upper() == "DEV":
+            return segments[idx + 1] if idx + 1 < len(segments) else "Otros"
+    return "Otros"
+
+
+def _project_costs(rows):
+    costs = {}
+    for r in rows:
+        if r["project"] is not None:
+            costs[r["project"]] = costs.get(r["project"], 0.0) + (r["cost"] or 0)
+    return costs
+
+
+def top_projects(rows, limit=3):
+    costs = _project_costs(rows)
+    total = sum(costs.values())
+    ranked = sorted(costs.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]
+    return [{"project": p, "client": client_of(p), "cost": round(c, 2),
+             "share": round(c / total, 3) if total > 0 else 0.0} for p, c in ranked]
+
+
+# --- Reglas de "Atención ahora" (Task 2) ---------------------------------------
+
+RULES = ()
+MAX_SIGNALS = 3
+_SEVERITY_ORDER = {"warning": 0, "info": 1}
+
+
+def evaluate_rules(ctx):
+    fired = []
+    for index, rule in enumerate(RULES):
+        signal = rule(ctx)
+        if signal is not None:
+            fired.append((index, signal))
+    fired.sort(key=lambda item: (_SEVERITY_ORDER[item[1]["severity"]], item[0]))
+    return [signal for _, signal in fired[:MAX_SIGNALS]]
+
+
+# --- Ensamblado ----------------------------------------------------------------
+
+def build_briefing(project_rows, model_rows, settings, today, source="all", compare=None, degraded=False):
+    if source not in VALID_SOURCES:
+        raise BriefingError(f"Fuente desconocida: {source}")
+    if compare is not None and not _MONTH_RE.match(compare):
+        raise BriefingError("El parámetro compare debe tener el formato YYYY-MM")
+
+    current = month_of(today)
+    rows = rows_for_source(source, project_rows, model_rows)
+    start = min((r["date"] for r in rows), default=None)
+    eligible = eligible_months(start, current)
+    by_month = {entry["month"]: entry for entry in eligible}
+
+    if compare is None:
+        compare_month = previous_month(current)
+    elif compare in by_month or degraded:
+        compare_month = compare
+    else:
+        raise BriefingError(f"No hay datos para comparar con {compare}")
+    entry = by_month.get(compare_month)
+
+    window = month_window(current, today.day)
+    compare_window = month_window(compare_month, today.day)
+    window_rows = in_range(rows, *window)
+    compare_rows = in_range(rows, *compare_window) if entry else []
+
+    cost_now, cost_prev = sum_cost(window_rows), (sum_cost(compare_rows) if entry else None)
+    tokens_now, tokens_prev = sum_tokens(window_rows), (sum_tokens(compare_rows) if entry else None)
+
+    ctx = {"source": source, "today": today, "window": window, "rows": rows, "window_rows": window_rows,
+           "project_rows": project_rows, "model_rows": model_rows, "settings": settings}
+
+    return {
+        "source": source,
+        "window": {"month": current, "from": window[0], "to": window[1]},
+        "compare": {"month": compare_month, "from": compare_window[0], "to": compare_window[1],
+                    "coverage": entry["coverage"] if entry else "none",
+                    "since": entry["since"] if entry else None},
+        "eligible_months": eligible,
+        "kpis": {
+            "cost": {"current": round(cost_now, 2),
+                     "previous": round(cost_prev, 2) if cost_prev is not None else None,
+                     "delta_pct": delta_pct(cost_now, cost_prev)},
+            "tokens": {"current": tokens_now, "previous": tokens_prev,
+                       "delta_pct": delta_pct(tokens_now, tokens_prev)},
+            "active_days": {"current": len(active_dates(window_rows)),
+                            "previous": len(active_dates(compare_rows)) if entry else None},
+            "cost_incomplete": any(r["cost"] is None for r in window_rows),
+        },
+        "subscription": (subscription_summary(source, project_rows, settings, window)
+                         if source != "openrouter" else subscription_summary("openrouter", [], settings, window)),
+        "top_projects": top_projects(window_rows),
+        "attention": evaluate_rules(ctx),
+        "degraded": degraded,
+    }
