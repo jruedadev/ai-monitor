@@ -256,22 +256,16 @@
   }
 }
 
-/* ai-monitor: make the trend line clearly visible in both themes */
+/* ai-monitor: línea de tendencia de 2px en el color de la entidad (--trend-stroke,
+   fijado por TrendChart según la sección) y marcador solo en el punto activo del hover. */
 .ai-monitor-trendchart .recharts-line-curve {
-  stroke: var(--tremor-brand-emphasis) !important;
-  stroke-width: 3 !important;
-  stroke-opacity: 0.95 !important;
-}
-
-.ai-monitor-trendchart circle.recharts-dot {
-  fill: var(--tremor-brand-emphasis) !important;
-  stroke: var(--tremor-background) !important;
+  stroke: var(--trend-stroke, var(--tremor-brand-emphasis)) !important;
   stroke-width: 2 !important;
-  r: 3.5;
 }
 
 .ai-monitor-trendchart circle.recharts-active-dot {
-  fill: var(--tremor-brand-emphasis) !important;
+  fill: var(--trend-stroke, var(--tremor-brand-emphasis)) !important;
   stroke: var(--tremor-background) !important;
-  stroke-width: 3 !important;
+  stroke-width: 2 !important;
+  r: 5;
 }

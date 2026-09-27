@@ -65,21 +65,38 @@ export interface DailyProjectRow {
   cost: number | null;
 }
 
-export async function fetchHistory(days: number): Promise<{ daily_project: DailyProjectRow[] }> {
-  const res = await fetch(`/api/history?days=${days}`);
-  return res.json();
+export interface DailyModelRow {
+  date: string;
+  model: string;
+  tokens: number;
+  cost: number;
 }
 
-export async function fetchRoiSettings(): Promise<RoiSettings> {
-  const res = await fetch("/api/roi-settings");
-  return res.json();
+export interface HistoryResponse {
+  daily_project: DailyProjectRow[];
+  daily_model: DailyModelRow[];
 }
 
-export async function saveRoiSettings(settings: Partial<RoiSettings>): Promise<RoiSettings> {
-  const res = await fetch("/api/roi-settings", {
+/** fetch + JSON que falla con un Error legible si el servidor responde != 2xx
+ * (sin esto un 500 llega como JSON de error y se trata como datos válidos). */
+async function getJson<T>(input: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(input, init);
+  if (!res.ok) throw new Error(`${init?.method ?? "GET"} ${input} → HTTP ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+export function fetchHistory(days: number): Promise<HistoryResponse> {
+  return getJson(`/api/history?days=${days}`);
+}
+
+export function fetchRoiSettings(): Promise<RoiSettings> {
+  return getJson("/api/roi-settings");
+}
+
+export function saveRoiSettings(settings: Partial<RoiSettings>): Promise<RoiSettings> {
+  return getJson("/api/roi-settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings),
   });
-  return res.json();
 }

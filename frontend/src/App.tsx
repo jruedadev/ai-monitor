@@ -1,29 +1,39 @@
-import { useState } from "react";
+import { Suspense, lazy } from "react";
+import { Navigate } from "react-router-dom";
 import { useUsageStream } from "@/hooks/useUsageStream";
-import { Sidebar, type SectionKey } from "@/components/Sidebar";
+import { useDashboardRoute } from "@/hooks/useDashboardRoute";
+import { AppSidebar } from "@/components/Sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { KpiCards } from "@/components/KpiCards";
 import { ProjectTable } from "@/components/ProjectTable";
-import { TrendChart } from "@/components/TrendChart";
 import { SessionDetail } from "@/components/SessionDetail";
 import { ProjectDetailSheet } from "@/components/ProjectDetailSheet";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { RoiView } from "@/components/RoiView";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ProjectUsage } from "@/lib/api";
 import { clientOf, groupProjectsByClient } from "@/lib/clients";
 
+// Tremor/recharts pesan la mayor parte del bundle: se cargan aparte para que
+// la tabla y los KPI pinten sin esperarlos.
+const TrendChart = lazy(() => import("@/components/TrendChart").then((m) => ({ default: m.TrendChart })));
+const RoiView = lazy(() => import("@/components/RoiView").then((m) => ({ default: m.RoiView })));
+
+function SectionFallback({ label }: { label: string }) {
+  return (
+    <div aria-busy="true" aria-label={label} className="rounded-xl border bg-card p-5 space-y-3">
+      <Skeleton className="h-5 w-56" />
+      <Skeleton className="h-64 w-full" />
+    </div>
+  );
+}
+
 export default function App() {
-  const [section, setSection] = useState<SectionKey>("all");
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
-  const [clientFilter, setClientFilter] = useState<string | null>(null);
+  const {
+    valid, section, client: clientFilter, selectedDate, selectedProject, setSelectedDate, setSelectedProject,
+  } = useDashboardRoute();
   const { sources, combined, connected } = useUsageStream();
 
   const projectsByClient = groupProjectsByClient(Object.keys(combined ?? {}));
-
-  const handleSelectClient = (client: string | null) => {
-    setClientFilter(client);
-    if (client) setSection("all");
-  };
 
   const projectsForSection = (): Record<string, ProjectUsage> => {
     if (!sources || !combined) return {};
@@ -66,20 +76,18 @@ export default function App() {
       ? "Vista general"
       : { claude_code: "Claude Code", codex: "Codex", opencode: "OpenCode", hermes: "Hermes", openrouter: "OpenRouter", roi: "ROI" }[section];
 
+  if (!valid) return <Navigate to="/" replace />;
+
   return (
-    <div className="min-h-screen flex bg-background text-foreground">
-      <Sidebar
-        active={section}
-        onSelect={setSection}
-        projectsByClient={projectsByClient}
-        activeClient={clientFilter}
-        onSelectClient={handleSelectClient}
-        onSelectProject={setSelectedProject}
-      />
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-10 flex items-center justify-between px-6 h-16 border-b bg-background/80 backdrop-blur">
-          <h1 className="text-lg font-semibold">{activeLabel}</h1>
-          <div className="flex items-center gap-3">
+    <SidebarProvider className="bg-background text-foreground">
+      <AppSidebar active={section} activeClient={clientFilter} projectsByClient={projectsByClient} />
+      <SidebarInset className="min-w-0">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-b bg-background/80 px-4 backdrop-blur md:px-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <SidebarTrigger className="-ml-1" />
+            <h1 className="truncate text-lg font-semibold">{activeLabel}</h1>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
             <span
               role="status"
               aria-live="polite"
@@ -93,15 +101,20 @@ export default function App() {
             <ThemeToggle />
           </div>
         </header>
-        <main key={section} className="flex-1 p-6 space-y-6 max-w-[1400px] w-full">
+        {/* SidebarInset ya es el <main>; aquí un div para no anidar landmarks. */}
+        <div key={section} className="flex-1 space-y-6 p-4 md:p-6 max-w-[1400px] w-full min-w-0">
           {section === "roi" ? (
             <div className="dashboard-section" style={{ animationDelay: "0ms" }}>
-              <RoiView sources={sources} />
+              <Suspense fallback={<SectionFallback label="Cargando ROI" />}>
+                <RoiView sources={sources} />
+              </Suspense>
             </div>
           ) : (
           <>
           <div className="dashboard-section" style={{ animationDelay: "0ms" }}>
-            <TrendChart section={section} clientFilter={clientFilter} onSelectDate={setSelectedDate} />
+            <Suspense fallback={<SectionFallback label="Cargando tendencia" />}>
+              <TrendChart section={section} clientFilter={clientFilter} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+            </Suspense>
           </div>
           {openRouterUnavailable ? (
             <div className="dashboard-section rounded-xl border bg-card p-6 text-sm text-muted-foreground" style={{ animationDelay: "60ms" }}>
@@ -135,14 +148,14 @@ export default function App() {
           )}
           </>
           )}
-        </main>
-      </div>
+        </div>
+      </SidebarInset>
       <ProjectDetailSheet
         sources={sources}
         section={section}
         project={selectedProject}
         onClose={() => setSelectedProject(null)}
       />
-    </div>
+    </SidebarProvider>
   );
 }

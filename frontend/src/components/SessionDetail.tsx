@@ -5,10 +5,10 @@ import {
 import { SOURCE_META } from "@/lib/sources";
 import { collectSessions, SESSION_SOURCES, type FlatSession } from "@/lib/sessions";
 import { SessionIdentity } from "@/components/SessionIdentity";
-import type { SectionKey } from "@/components/Sidebar";
+import type { SectionKey } from "@/lib/routes";
 import type { UsageSnapshot } from "@/lib/api";
 import { clientOf } from "@/lib/clients";
-import { formatInt, formatUsd } from "@/lib/format";
+import { formatDate, formatInt, formatUsd } from "@/lib/format";
 
 interface SessionDetailProps {
   sources: UsageSnapshot["sources"] | null | undefined;
@@ -55,13 +55,13 @@ export function SessionDetail({
         >
           <option value="">Todas las fechas ({formatInt(allSessions.length)})</option>
           {availableDates.map((d) => (
-            <option key={d} value={d}>{d}</option>
+            <option key={d} value={d}>{formatDate(d)}</option>
           ))}
         </select>
       </div>
       {filtered.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          {selectedDate ? `Sin sesiones para ${selectedDate}.` : "Sin sesiones registradas."}
+          {selectedDate ? `Sin sesiones para el ${formatDate(selectedDate)}.` : "Sin sesiones registradas."}
         </p>
       ) : (
         <div className="space-y-6">

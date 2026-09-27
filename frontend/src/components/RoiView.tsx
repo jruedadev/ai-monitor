@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Save } from "lucide-react";
+import { AlertCircle, Check, Save, Scale } from "lucide-react";
 import {
   fetchHistory,
   fetchRoiSettings,
@@ -8,10 +8,11 @@ import {
   type RoiSettings,
   type UsageSnapshot,
 } from "@/lib/api";
-import { collectSessions, sessionDurationSeconds } from "@/lib/sessions";
+import { collectSessions } from "@/lib/sessions";
+import { computeSourceRoi, type CostComparison } from "@/lib/roi";
 import { SOURCE_META } from "@/lib/sources";
 import { clientOf, groupProjectsByClient } from "@/lib/clients";
-import { formatDecimal, formatUsd } from "@/lib/format";
+import { formatDate, formatDecimal, formatMonth, formatUsd } from "@/lib/format";
 
 interface RoiViewProps {
   sources: UsageSnapshot["sources"] | null;
@@ -30,56 +31,31 @@ const SUBSCRIPTION_START_KEY: Record<RoiSource, "subscription_start_claude" | "s
   codex: "subscription_start_codex",
 };
 
-function monthKey(date: string): string {
-  return date.slice(0, 7);
-}
-
-function monthLabel(key: string): string {
-  const [year, month] = key.split("-").map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString("es-ES", { year: "numeric", month: "long" });
-}
-
-/** Genera las claves YYYY-MM desde `start` (inclusive) hasta hoy (inclusive). */
-function monthRange(start: string): string[] {
-  const startKey = monthKey(start);
-  const [startYear, startMonth] = startKey.split("-").map(Number);
-  const now = new Date();
-  const endYear = now.getFullYear();
-  const endMonth = now.getMonth() + 1;
-
-  const keys: string[] = [];
-  let year = startYear;
-  let month = startMonth;
-  while (year < endYear || (year === endYear && month <= endMonth)) {
-    keys.push(`${year}-${String(month).padStart(2, "0")}`);
-    month += 1;
-    if (month > 12) {
-      month = 1;
-      year += 1;
-    }
-  }
-  return keys;
-}
-
 export function RoiView({ sources }: RoiViewProps) {
   const [settings, setSettings] = useState<RoiSettings | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [scopeFilter, setScopeFilter] = useState<string>("");
   const [historyRows, setHistoryRows] = useState<DailyProjectRow[]>([]);
 
   useEffect(() => {
-    fetchRoiSettings().then((s) => {
-      setSettings(s);
-      setDraft({
-        subscription_cost_claude: s.subscription_cost_claude?.toString() ?? "",
-        subscription_cost_codex: s.subscription_cost_codex?.toString() ?? "",
-        hourly_rate: s.hourly_rate?.toString() ?? "",
-        subscription_start_claude: s.subscription_start_claude ?? "",
-        subscription_start_codex: s.subscription_start_codex ?? "",
-      });
-    });
+    fetchRoiSettings()
+      .then((s) => {
+        setSettings(s);
+        setDraft({
+          subscription_cost_claude: s.subscription_cost_claude?.toString() ?? "",
+          subscription_cost_codex: s.subscription_cost_codex?.toString() ?? "",
+          hourly_rate: s.hourly_rate?.toString() ?? "",
+          subscription_start_claude: s.subscription_start_claude ?? "",
+          subscription_start_codex: s.subscription_start_codex ?? "",
+        });
+      })
+      .catch((err: Error) => setLoadError(err.message));
   }, []);
+
+  // Cualquier edición posterior invalida el "Cambios guardados" / error anterior.
+  useEffect(() => setSaveStatus("idle"), [draft]);
 
   const earliestStart = [settings?.subscription_start_claude, settings?.subscription_start_codex]
     .filter((d): d is string => Boolean(d))
@@ -97,7 +73,7 @@ export function RoiView({ sources }: RoiViewProps) {
   }, [earliestStart]);
 
   const handleSave = async () => {
-    setSaving(true);
+    setSaveStatus("saving");
     const payload: Partial<RoiSettings> = {
       subscription_cost_claude: draft.subscription_cost_claude ? Number(draft.subscription_cost_claude) : null,
       subscription_cost_codex: draft.subscription_cost_codex ? Number(draft.subscription_cost_codex) : null,
@@ -105,11 +81,23 @@ export function RoiView({ sources }: RoiViewProps) {
       subscription_start_claude: draft.subscription_start_claude || null,
       subscription_start_codex: draft.subscription_start_codex || null,
     };
-    const updated = await saveRoiSettings(payload);
-    setSettings(updated);
-    setSaving(false);
+    try {
+      setSettings(await saveRoiSettings(payload));
+      setSaveStatus("saved");
+    } catch (err) {
+      console.error("Error al guardar /api/roi-settings:", err);
+      setSaveStatus("error");
+    }
   };
 
+  if (loadError) {
+    return (
+      <div role="alert" className="flex items-center gap-2 rounded-xl border bg-card p-5 text-sm">
+        <AlertCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden />
+        No se pudo cargar la configuración de ROI ({loadError}).
+      </div>
+    );
+  }
   if (!settings) return null;
 
   const allProjectPaths = Array.from(
@@ -130,7 +118,7 @@ export function RoiView({ sources }: RoiViewProps) {
       <div className="rounded-xl border bg-card p-5 space-y-4">
         <h2 className="text-sm font-medium">Parametrización</h2>
         <label className="block space-y-1.5">
-          <span className="text-xs text-muted-foreground">Acotar a</span>
+          <span className="block text-xs text-muted-foreground">Acotar a</span>
           <select
             className="w-full max-w-xs rounded-lg border bg-background px-3 py-2 text-sm"
             value={scopeFilter}
@@ -178,14 +166,23 @@ export function RoiView({ sources }: RoiViewProps) {
             onChange={(v) => setDraft((d) => ({ ...d, subscription_start_codex: v }))}
           />
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50"
-        >
-          <Save className="h-4 w-4" aria-hidden />
-          {saving ? "Guardando…" : "Guardar"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saveStatus === "saving"}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <Save className="h-4 w-4" aria-hidden />
+            {saveStatus === "saving" ? "Guardando…" : "Guardar"}
+          </button>
+          <span role="status" aria-live="polite" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+            {saveStatus === "saved" && (<><Check className="h-4 w-4" aria-hidden />Cambios guardados</>)}
+            {saveStatus === "error" && (
+              <><AlertCircle className="h-4 w-4 text-destructive" aria-hidden />No se pudo guardar. Revisa que el servidor siga activo e inténtalo de nuevo.</>
+            )}
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -249,32 +246,19 @@ function SourceRoiCard({
   historyRows: DailyProjectRow[];
 }) {
   const meta = SOURCE_META[source];
-  const projects = sources?.[source] ?? {};
-  const apiCost = Object.entries(projects)
-    .filter(([path]) => matchesScope(path))
-    .reduce((sum, [, p]) => sum + p.cost, 0);
-  const subscriptionCost = settings[SUBSCRIPTION_KEY[source]];
   const subscriptionStart = settings[SUBSCRIPTION_START_KEY[source]];
-
-  const sessions = collectSessions(sources, source).filter((s) => matchesScope(s.project));
-  const totalHours = sessions.reduce((sum, s) => sum + sessionDurationSeconds(s), 0) / 3600;
-  const hourlyRate = settings.hourly_rate;
-  const valueGenerated = hourlyRate !== null ? totalHours * hourlyRate : null;
-
-  const monthly = subscriptionStart
-    ? monthRange(subscriptionStart).map((key) => {
-        const apiCostMonth = historyRows
-          .filter((row) => row.source === source && monthKey(row.date) === key && matchesScope(row.project))
-          .reduce((sum, row) => sum + (row.cost ?? 0), 0);
-        return { key, apiCostMonth };
-      })
-    : [];
-
-  const apiCostScoped = subscriptionStart
-    ? monthly.reduce((sum, m) => sum + m.apiCostMonth, 0)
-    : apiCost;
-  const subscriptionTotalCost =
-    subscriptionStart && subscriptionCost !== null ? subscriptionCost * monthly.length : subscriptionCost;
+  const roi = computeSourceRoi({
+    source,
+    projectCosts: Object.fromEntries(Object.entries(sources?.[source] ?? {}).map(([path, p]) => [path, p.cost])),
+    sessions: collectSessions(sources, source),
+    historyRows,
+    subscriptionCost: settings[SUBSCRIPTION_KEY[source]],
+    subscriptionStart,
+    hourlyRate: settings.hourly_rate,
+    matchesScope,
+  });
+  const subscriptionMonthly = settings[SUBSCRIPTION_KEY[source]];
+  const subscriptionWins = roi.monthly.filter((m) => m.comparison?.winner === "subscription").length;
 
   return (
     <div className="rounded-xl border bg-card p-5 space-y-3">
@@ -284,75 +268,110 @@ function SourceRoiCard({
       </div>
 
       <Row
-        label={subscriptionStart ? `Costo real (API) desde ${subscriptionStart}` : "Costo real (API)"}
-        value={formatUsd(apiCostScoped)}
+        label={subscriptionStart ? `Costo real (API) desde ${formatDate(subscriptionStart)}` : "Costo real (API)"}
+        value={formatUsd(roi.apiCost)}
       />
       <Row
-        label={
-          subscriptionStart
-            ? `Costo suscripción (${monthly.length} ${monthly.length === 1 ? "mes" : "meses"})`
-            : "Costo suscripción"
-        }
-        value={subscriptionTotalCost !== null ? formatUsd(subscriptionTotalCost) : "—"}
+        label={subscriptionStart ? `Costo suscripción (${roi.months} ${roi.months === 1 ? "mes" : "meses"})` : "Costo suscripción"}
+        value={roi.subscriptionTotal !== null ? formatUsd(roi.subscriptionTotal) : "—"}
       />
-      {subscriptionTotalCost !== null && (
-        <Row
-          label={apiCostScoped <= subscriptionTotalCost ? "Ahorro vs. suscripción" : "Sobrecosto vs. suscripción"}
-          value={formatUsd(Math.abs(subscriptionTotalCost - apiCostScoped))}
-          emphasize
-        />
-      )}
+      {roi.comparison && <Verdict comparison={roi.comparison} />}
 
       <div className="h-px bg-border my-1" />
 
-      <Row label="Horas de sesión" value={formatDecimal(totalHours)} />
-      <Row
-        label="Valor generado"
-        value={valueGenerated !== null ? formatUsd(valueGenerated) : "—"}
-      />
-      {valueGenerated !== null && (
-        <Row
-          label="ROI (valor / costo API)"
-          value={apiCost > 0 ? `${formatDecimal(valueGenerated / apiCost)}x` : "—"}
-          emphasize
-        />
+      {subscriptionStart && (
+        <p className="text-xs text-muted-foreground">Productividad desde {formatDate(subscriptionStart)}</p>
+      )}
+      <Row label="Horas de sesión" value={formatDecimal(roi.hours)} />
+      <Row label="Valor generado" value={roi.valueGenerated !== null ? formatUsd(roi.valueGenerated) : "—"} />
+      {roi.valueGenerated !== null && (
+        <Row label="ROI (valor / costo API)" value={roi.roi !== null ? `${formatDecimal(roi.roi)}x` : "—"} emphasize />
       )}
 
-      {monthly.length > 0 && (
+      {roi.monthly.length > 0 && subscriptionStart && (
         <>
           <div className="h-px bg-border my-1" />
           <div className="space-y-1.5">
-            <span className="text-xs text-muted-foreground">Desglose mensual desde {subscriptionStart}</span>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs text-muted-foreground">
+              <span>Desglose mensual desde {formatDate(subscriptionStart)}</span>
+              {subscriptionMonthly !== null && (
+                <span>
+                  La suscripción convino en{" "}
+                  <span className="font-medium text-foreground tabular-nums">{subscriptionWins} de {roi.monthly.length}</span>{" "}
+                  {roi.monthly.length === 1 ? "mes" : "meses"}
+                </span>
+              )}
+            </div>
+            <div className="-mx-1 overflow-x-auto px-1">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-muted-foreground text-left">
                   <th className="font-normal py-1">Mes</th>
-                  <th className="font-normal py-1 text-right">Costo API</th>
-                  <th className="font-normal py-1 text-right">Suscripción</th>
-                  <th className="font-normal py-1 text-right">Diferencia</th>
+                  <th className="font-normal py-1 pl-2 text-right">Costo API</th>
+                  <th className="hidden font-normal py-1 pl-2 text-right sm:table-cell">Suscripción</th>
+                  <th className="font-normal py-1 pl-2 text-right">Conviene</th>
                 </tr>
               </thead>
               <tbody>
-                {monthly.map(({ key, apiCostMonth }) => (
+                {roi.monthly.map(({ key, apiCost, comparison }) => (
                   <tr key={key} className="tabular-nums">
-                    <td className="py-0.5 capitalize">{monthLabel(key)}</td>
-                    <td className="py-0.5 text-right">{formatUsd(apiCostMonth)}</td>
-                    <td className="py-0.5 text-right">
-                      {subscriptionCost !== null ? formatUsd(subscriptionCost) : "—"}
-                    </td>
-                    <td className="py-0.5 text-right">
-                      {subscriptionCost !== null
-                        ? formatUsd(Math.abs(subscriptionCost - apiCostMonth))
-                        : "—"}
-                    </td>
+                    <td className="py-1">{formatMonth(key)}</td>
+                    <td className="py-1 pl-2 text-right">{formatUsd(apiCost)}</td>
+                    <td className="hidden py-1 pl-2 text-right sm:table-cell">{subscriptionMonthly !== null ? formatUsd(subscriptionMonthly) : "—"}</td>
+                    <td className="py-1 pl-2 text-right">{comparison ? <WinnerCell comparison={comparison} /> : "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}
     </div>
+  );
+}
+
+const WINNER_LABEL = { subscription: "Suscripción", api: "API", tie: "Empate" } as const;
+
+/** Veredicto explícito para decidir: qué opción es más barata y cuánto ahorra.
+ * Se dice con texto (nunca con color o signo), así no hay que interpretar "+/−". */
+function Verdict({ comparison }: { comparison: CostComparison }) {
+  const title =
+    comparison.winner === "subscription"
+      ? "Conviene la suscripción"
+      : comparison.winner === "api"
+        ? "Conviene pagar por uso (API)"
+        : "Suscripción y API cuestan lo mismo";
+  const detail =
+    comparison.winner === "subscription"
+      ? "frente a pagar por uso"
+      : comparison.winner === "api"
+        ? "frente a la suscripción"
+        : "";
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border bg-muted/40 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+      <span className="inline-flex items-center gap-2 font-medium">
+        <Scale className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        {title}
+      </span>
+      {comparison.winner !== "tie" && (
+        <span className="pl-6 tabular-nums sm:pl-0 sm:text-right">
+          <span className="font-semibold">ahorra {formatUsd(comparison.savings)}</span>
+          <span className="text-xs text-muted-foreground sm:block"> {detail}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function WinnerCell({ comparison }: { comparison: CostComparison }) {
+  return (
+    <span className="flex flex-col items-end leading-tight">
+      <span className={comparison.winner === "subscription" ? "font-medium" : undefined}>{WINNER_LABEL[comparison.winner]}</span>
+      {comparison.winner !== "tie" && (
+        <span className="text-xs text-muted-foreground whitespace-nowrap">ahorra {formatUsd(comparison.savings)}</span>
+      )}
+    </span>
   );
 }
 

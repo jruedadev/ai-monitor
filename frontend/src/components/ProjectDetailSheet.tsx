@@ -8,7 +8,7 @@ import { SourceChip } from "@/components/SourceChip";
 import { formatCompact, formatInt, formatUsd } from "@/lib/format";
 import { collectSessions } from "@/lib/sessions";
 import { SessionIdentity } from "@/components/SessionIdentity";
-import type { SectionKey } from "@/components/Sidebar";
+import type { SectionKey } from "@/lib/routes";
 import type { UsageSnapshot } from "@/lib/api";
 
 interface ProjectDetailSheetProps {

@@ -14,3 +14,22 @@ export const formatUsd = (value: number) => usd.format(value);
 export const formatInt = (value: number) => integer.format(value);
 export const formatCompact = (value: number) => compact.format(value);
 export const formatDecimal = (value: number) => oneDecimal.format(value);
+
+const monthYear = new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric" });
+const dayMonth = new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "short" });
+const fullDate = new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "short", year: "numeric" });
+
+/** "YYYY-MM-DD" como fecha local (new Date("YYYY-MM-DD") es UTC y en UTC-5 retrocede un día). */
+function parseIsoDate(iso: string): Date {
+  const [year, month, day] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(year, month - 1, day || 1);
+}
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** "2026-04" → "Abril de 2026" (solo la primera letra en mayúscula, no "Abril De 2026"). */
+export const formatMonth = (yearMonth: string) => capitalize(monthYear.format(parseIsoDate(yearMonth)));
+/** "2026-07-18" → "18 jul" */
+export const formatDayShort = (iso: string) => dayMonth.format(parseIsoDate(iso)).replace(/\./g, "").replace(/ de /g, " ");
+/** "2026-07-18" → "18 jul 2026" */
+export const formatDate = (iso: string) => fullDate.format(parseIsoDate(iso)).replace(/\./g, "").replace(/ de /g, " ");

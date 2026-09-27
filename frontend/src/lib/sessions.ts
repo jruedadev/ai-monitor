@@ -1,4 +1,4 @@
-import type { SectionKey } from "@/components/Sidebar";
+import type { SectionKey } from "@/lib/routes";
 import type { SessionDetailEntry, UsageSnapshot } from "@/lib/api";
 
 export interface FlatSession extends SessionDetailEntry {
@@ -37,7 +37,7 @@ function toEpochMs(ts: string | number | null): number | null {
   return typeof ts === "number" ? ts * 1000 : new Date(ts).getTime();
 }
 
-export function sessionDurationSeconds(session: SessionDetailEntry): number {
+export function sessionDurationSeconds(session: Pick<SessionDetailEntry, "first_ts" | "last_ts">): number {
   const start = toEpochMs(session.first_ts);
   const end = toEpochMs(session.last_ts);
   if (start === null || end === null || end < start) return 0;
