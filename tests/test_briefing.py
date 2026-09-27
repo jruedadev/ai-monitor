@@ -1,5 +1,7 @@
 import json
 import os
+import sqlite3
+import tempfile
 import unittest
 from datetime import date
 
@@ -310,6 +312,78 @@ class TestRules(unittest.TestCase):
 
     def test_no_rows_no_signals(self):
         self.assertEqual(build([])["attention"], [])
+
+
+class TestSqlite(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.db = os.path.join(self.dir, "history.db")
+
+    def _insert(self, project_rows=(), model_rows=()):
+        history.ensure_schema(self.db)
+        con = sqlite3.connect(self.db)
+        con.executemany("INSERT INTO daily_project (date, source, project, tokens, cost) VALUES (?, ?, ?, ?, ?)",
+                        project_rows)
+        con.executemany("INSERT INTO daily_model (date, model, tokens, cost) VALUES (?, ?, ?, ?)", model_rows)
+        con.commit()
+        con.close()
+
+    def test_missing_db_returns_empty_response_without_creating_file(self):
+        data = briefing.get_briefing(db_path=self.db, today=TODAY)
+        self.assertFalse(os.path.exists(self.db))
+        self.assertFalse(data["degraded"])
+        self.assertEqual(data["kpis"]["cost"], {"current": 0, "previous": None, "delta_pct": None})
+        self.assertEqual(data["eligible_months"], [])
+        self.assertEqual(data["attention"], [])
+        self.assertFalse(data["subscription"]["configured"])
+
+    def test_file_without_tables_is_empty_not_degraded(self):
+        open(self.db, "w").close()
+        data = briefing.get_briefing(db_path=self.db, today=TODAY)
+        self.assertFalse(data["degraded"])
+        self.assertEqual(data["attention"], [])
+
+    def test_empty_schema_keeps_configured_subscription(self):
+        history.ensure_schema(self.db)
+        history.save_roi_settings({"subscription_cost_claude": 20.0}, db_path=self.db)
+        data = briefing.get_briefing(db_path=self.db, today=TODAY)
+        self.assertTrue(data["subscription"]["configured"])
+        self.assertEqual(data["subscription"]["api_equivalent"], 0.0)
+
+    def test_corrupt_db_is_degraded(self):
+        with open(self.db, "wb") as f:
+            f.write(b"esto no es una base sqlite" * 200)
+        data = briefing.get_briefing(db_path=self.db, today=TODAY, compare="2026-08")
+        self.assertTrue(data["degraded"])
+        self.assertEqual(data["attention"], [])
+        self.assertEqual(data["kpis"]["cost"]["current"], 0)
+
+    def test_reads_rows_models_and_text_start_date(self):
+        self._insert(
+            [("2026-08-27", "claude_code", APP, 10, 4.0), ("2026-09-20", "claude_code", APP, 10, 6.0),
+             ("2026-09-10", "claude_code", APP, 10, 100.0)],
+            [("2026-09-03", "__all__", 70, 50.0)],
+        )
+        history.save_roi_settings({"subscription_cost_claude": 20.0, "subscription_start_claude": "2026-09-15"},
+                                  db_path=self.db)
+        data = briefing.get_briefing(db_path=self.db, today=TODAY)
+        self.assertEqual(data["kpis"]["cost"]["current"], 106.0)
+        self.assertEqual(data["kpis"]["cost"]["previous"], 4.0)
+        self.assertEqual(data["subscription"]["api_equivalent"], 6.0)
+        self.assertEqual(briefing.get_briefing(db_path=self.db, today=TODAY, source="openrouter")
+                         ["kpis"]["cost"]["current"], 50.0)
+
+    def test_invalid_source_raises_even_without_db(self):
+        with self.assertRaises(briefing.BriefingError):
+            briefing.get_briefing(db_path=self.db, source="nope", today=TODAY)
+
+    def test_format_briefing_for_cli(self):
+        self._insert([("2026-08-27", "claude_code", APP, 1000, 10.0), ("2026-09-27", "claude_code", APP, 500, 5.0)])
+        text = briefing.format_briefing(briefing.get_briefing(db_path=self.db, today=TODAY))
+        self.assertIn("Gasto equivalente API: $ 5,00 (-50,0 %)", text)
+        self.assertIn("Tokens: 500 (-50,0 %)", text)
+        self.assertIn("Días activos: 1 (antes: 1)", text)
+        self.assertIn("Atención ahora", text)
 
 
 if __name__ == "__main__":

@@ -4,10 +4,18 @@ proveedores. Lógica en funciones puras sobre filas; SQLite en una capa delgada.
 Spec: docs/superpowers/specs/2026-09-27-inicio-briefing-design.md
 """
 import calendar
+import logging
 import math
+import os
 import re
+import sqlite3
 from datetime import date, timedelta
+from pathlib import Path
 from urllib.parse import quote
+
+import history
+
+log = logging.getLogger(__name__)
 
 PROJECT_SOURCES = ("claude_code", "codex", "opencode", "hermes")
 VALID_SOURCES = ("all",) + PROJECT_SOURCES + ("openrouter",)
@@ -381,3 +389,101 @@ def build_briefing(project_rows, model_rows, settings, today, source="all", comp
         "attention": evaluate_rules(ctx),
         "degraded": degraded,
     }
+
+
+# --- Capa SQLite ---------------------------------------------------------------
+
+def _empty_settings():
+    return {key: None for key in history.ROI_SETTINGS_KEYS}
+
+
+def load(db_path):
+    """(project_rows, model_rows, settings). Sin base o sin tablas → vacío.
+    Abre en solo lectura: el briefing nunca crea ni modifica history.db.
+    Los sqlite3.Error se propagan para que get_briefing los marque como degradados."""
+    settings = _empty_settings()
+    if not os.path.exists(db_path):
+        return [], [], settings
+    con = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
+    try:
+        tables = {name for (name,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        project_rows = []
+        if "daily_project" in tables:
+            project_rows = [
+                {"date": d[:10], "source": s, "project": p, "tokens": t or 0, "cost": c}
+                for d, s, p, t, c in con.execute("SELECT date, source, project, tokens, cost FROM daily_project")
+            ]
+        model_rows = []
+        if "daily_model" in tables:
+            model_rows = [
+                {"date": d[:10], "model": m, "tokens": t or 0, "cost": c}
+                for d, m, t, c in con.execute("SELECT date, model, tokens, cost FROM daily_model")
+            ]
+        if "roi_settings" in tables:
+            for key, value in con.execute("SELECT key, value FROM roi_settings"):
+                if key in settings:
+                    settings[key] = value
+    finally:
+        con.close()
+    return project_rows, model_rows, settings
+
+
+def get_briefing(db_path=None, source="all", compare=None, today=None):
+    db_path = db_path or history.DB_PATH_DEFAULT
+    today = today or date.today()
+    if source not in VALID_SOURCES:
+        raise BriefingError(f"Fuente desconocida: {source}")
+    try:
+        project_rows, model_rows, settings = load(db_path)
+        degraded = False
+    except sqlite3.Error as exc:
+        log.warning("briefing: no se pudo leer %s: %s", db_path, exc)
+        project_rows, model_rows, settings = [], [], _empty_settings()
+        degraded = True
+    return build_briefing(project_rows, model_rows, settings, today,
+                          source=source, compare=compare, degraded=degraded)
+
+
+# --- CLI -------------------------------------------------------------------------
+
+def _delta_text(value):
+    return "sin datos para comparar" if value is None else f"{value:+.1f} %".replace(".", ",")
+
+
+def format_briefing(data):
+    window, compare, kpis, sub = data["window"], data["compare"], data["kpis"], data["subscription"]
+    lines = [f"Briefing {window['month']} ({format_day(window['from'])}–{format_day(window['to'])})"]
+    if compare["coverage"] == "none":
+        lines.append("Sin mes con datos para comparar")
+    else:
+        partial = f", cobertura parcial desde {format_day(compare['since'])}" if compare["since"] else ""
+        lines.append(f"Comparado con {format_day(compare['from'])}–{format_day(compare['to'])}{partial}")
+    if data.get("degraded"):
+        lines.append("Historial no disponible temporalmente")
+    lines += [
+        "",
+        f"Gasto equivalente API: {format_usd(kpis['cost']['current'])} ({_delta_text(kpis['cost']['delta_pct'])})",
+        f"Tokens: {format_int(kpis['tokens']['current'])} ({_delta_text(kpis['tokens']['delta_pct'])})",
+        f"Días activos: {kpis['active_days']['current']}"
+        + (f" (antes: {kpis['active_days']['previous']})" if kpis["active_days"]["previous"] is not None else ""),
+    ]
+    if sub["configured"]:
+        verdict = {"subscription": f"ahorras {format_usd(sub['savings'])}",
+                   "api": f"la API saldría {format_usd(sub['savings'])} más barata",
+                   "tie": "empate"}[sub["winner"]]
+        lines.append(f"Suscripción: pagas {format_usd(sub['paid'])} · equivale a "
+                     f"{format_usd(sub['api_equivalent'])} · {verdict}")
+    else:
+        lines.append("Suscripción: sin plan configurado")
+    if data["top_projects"]:
+        lines += ["", "Top proyectos:"]
+        for i, p in enumerate(data["top_projects"], 1):
+            lines.append(f"  {i}. {p['project']} ({p['client']}) {format_usd(p['cost'])} · {round(p['share'] * 100)} %")
+    lines += ["", "Atención ahora:"]
+    if not data["attention"]:
+        lines.append("  Nada requiere tu atención ahora")
+    for signal in data["attention"]:
+        marker = "!" if signal["severity"] == "warning" else "i"
+        lines.append(f"  [{marker}] {signal['title']}")
+        lines += [f"      - {item}" for item in signal["evidence"]]
+    return "\n".join(lines)
