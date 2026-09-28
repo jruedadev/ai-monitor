@@ -71,7 +71,7 @@
 
 ```json
 [
-  {"path": "/home/u/DEV/JRDV/ai-monitor", "client": "JRDV"},
+  {"path": "/home/u/DEV/GLOBEX/ai-monitor", "client": "GLOBEX"},
   {"path": "/home/u/dev/Acme/app", "client": "Acme"},
   {"path": "/home/u/Dev/Mixto/x", "client": "Mixto"},
   {"path": "/srv/DEV/A/DEV/B/app", "client": "A"},
