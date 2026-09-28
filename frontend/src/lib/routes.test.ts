@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { clientPath, parsePath, sectionPath, SECTION_KEYS } from "@/lib/routes";
+import { withSource } from "@/lib/routes";
 
 describe("parsePath", () => {
   it("raíz = vista general", () => {
@@ -29,5 +30,13 @@ describe("ida y vuelta", () => {
 
   it("clientPath se vuelve a parsear igual", () => {
     expect(parsePath(clientPath("A/B & C"))).toEqual({ section: "all", client: "A/B & C" });
+  });
+});
+
+describe("withSource", () => {
+  it("conserva ?fuente= de la URL actual y no pisa uno explícito", () => {
+    expect(withSource("/actividad?dia=2026-09-27", "?fuente=codex&dia=2026-01-01")).toBe("/actividad?dia=2026-09-27&fuente=codex");
+    expect(withSource("/gasto?fuente=claude-code", "?fuente=codex")).toBe("/gasto?fuente=claude-code");
+    expect(withSource("/configuracion", "")).toBe("/configuracion");
   });
 });

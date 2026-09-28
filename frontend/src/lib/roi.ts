@@ -4,11 +4,11 @@
  * MISMA ventana temporal: con fecha de inicio de suscripción, desde esa fecha
  * (costo API por historial diario); sin ella, el periodo completo del snapshot.
  */
-import type { DailyProjectRow, SessionDetailEntry } from "@/lib/api";
+import type { CostWinner, DailyProjectRow, SessionDetailEntry } from "@/lib/api";
 import { sessionDurationSeconds } from "@/lib/sessions";
 
-/** Qué opción sale más barata para el mismo consumo. */
-export type CostWinner = "subscription" | "api" | "tie";
+/** Qué opción sale más barata para el mismo consumo (definido en api.ts para evitar un ciclo de import). */
+export type { CostWinner } from "@/lib/api";
 
 export interface CostComparison {
   winner: CostWinner;

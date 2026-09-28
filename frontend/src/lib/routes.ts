@@ -51,3 +51,20 @@ export function sectionPath(section: SectionKey): string {
 export function clientPath(client: string): string {
   return `/cliente/${encodeURIComponent(client)}`;
 }
+
+export const SOURCE_PARAM = "fuente";
+export const COMPARE_PARAM = "comparar";
+
+export function withQuery(path: string, params: URLSearchParams): string {
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+/** Enlace interno que conserva el filtro global ?fuente= de la URL actual. */
+export function withSource(target: string, search: string): string {
+  const current = new URLSearchParams(search).get(SOURCE_PARAM);
+  const [path, query = ""] = target.split("?");
+  const params = new URLSearchParams(query);
+  if (current && !params.has(SOURCE_PARAM)) params.set(SOURCE_PARAM, current);
+  return withQuery(path, params);
+}

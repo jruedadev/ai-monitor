@@ -18,3 +18,7 @@ export const SOURCE_META: Record<string, SourceMeta> = {
   hermes: { label: "Hermes", color: "var(--viz-yellow)", icon: Bot },
   openrouter: { label: "OpenRouter", color: "var(--viz-orange)", icon: Network },
 };
+
+/** Filtro global de fuente (?fuente=). "all" suma las cuatro fuentes por proyecto; nunca OpenRouter. */
+export const SOURCE_KEYS = ["all", "claude_code", "codex", "opencode", "hermes", "openrouter"] as const;
+export type SourceKey = (typeof SOURCE_KEYS)[number];
