@@ -4,15 +4,16 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { SOURCE_META, chipStyle } from "@/lib/sources";
+import { SourceChip } from "@/components/SourceChip";
+import { formatCompact, formatInt, formatUsd } from "@/lib/format";
 import { collectSessions } from "@/lib/sessions";
 import { SessionIdentity } from "@/components/SessionIdentity";
-import type { SectionKey } from "@/components/Sidebar";
+import type { SourceKey } from "@/lib/sources";
 import type { UsageSnapshot } from "@/lib/api";
 
 interface ProjectDetailSheetProps {
   sources: UsageSnapshot["sources"] | null | undefined;
-  section: SectionKey;
+  section: SourceKey;
   project: string | null;
   onClose: () => void;
 }
@@ -25,9 +26,6 @@ export function ProjectDetailSheet({ sources, section, project, onClose }: Proje
       return tb.localeCompare(ta);
     })
     : [];
-
-  const formatTokens = (value: number) =>
-    new Intl.NumberFormat("es", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 
   const totalTokens = sessions.reduce((s, r) => s + r.tokens, 0);
   const totalCost = sessions.reduce((s, r) => s + r.cost, 0);
@@ -42,32 +40,21 @@ export function ProjectDetailSheet({ sources, section, project, onClose }: Proje
         </SheetHeader>
 
         <div className="px-4 flex flex-wrap gap-2">
-          {usedSources.map((src) => {
-            const meta = SOURCE_META[src];
-            return (
-              <span
-                key={src}
-                className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-                style={chipStyle(meta?.color)}
-              >
-                {meta?.label ?? src}
-              </span>
-            );
-          })}
+          {usedSources.map((src) => <SourceChip key={src} source={src} />)}
         </div>
 
         <div className="px-4 grid grid-cols-3 gap-3">
           <div className="rounded-lg border p-3">
             <p className="text-xs text-muted-foreground">Tokens</p>
-            <p className="text-lg font-semibold tabular-nums">{totalTokens.toLocaleString("es")}</p>
+            <p className="text-lg font-semibold tabular-nums">{formatInt(totalTokens)}</p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-xs text-muted-foreground">Costo</p>
-            <p className="text-lg font-semibold tabular-nums">${totalCost.toFixed(2)}</p>
+            <p className="text-lg font-semibold tabular-nums">{formatUsd(totalCost)}</p>
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-xs text-muted-foreground">Sesiones</p>
-            <p className="text-lg font-semibold tabular-nums">{sessions.length}</p>
+            <p className="text-lg font-semibold tabular-nums">{formatInt(sessions.length)}</p>
           </div>
         </div>
 
@@ -85,28 +72,20 @@ export function ProjectDetailSheet({ sources, section, project, onClose }: Proje
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sessions.map((s) => {
-                  const meta = SOURCE_META[s.source];
-                  return (
-                    <TableRow key={`${s.source}-${s.session_id}`}>
-                      {section === "all" && (
-                        <TableCell className="overflow-hidden">
-                          <span
-                            className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-                            style={chipStyle(meta?.color)}
-                          >
-                            {meta?.label ?? s.source}
-                          </span>
-                        </TableCell>
-                      )}
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{s.date ?? "—"}</TableCell>
+                {sessions.map((s) => (
+                  <TableRow key={`${s.source}-${s.session_id}`}>
+                    {section === "all" && (
                       <TableCell className="overflow-hidden">
-                        <SessionIdentity title={s.title} sessionId={s.session_id} />
+                        <SourceChip source={s.source} />
                       </TableCell>
-                      <TableCell className="text-right tabular-nums whitespace-nowrap overflow-hidden">{formatTokens(s.tokens)}</TableCell>
-                    </TableRow>
-                  );
-                })}
+                    )}
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{s.date ?? "—"}</TableCell>
+                    <TableCell className="overflow-hidden">
+                      <SessionIdentity title={s.title} sessionId={s.session_id} />
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap overflow-hidden">{formatCompact(s.tokens)}</TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}

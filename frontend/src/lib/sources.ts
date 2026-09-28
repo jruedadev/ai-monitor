@@ -3,7 +3,7 @@ import { Sparkles, TerminalSquare, Code2, Network, Bot, type LucideIcon } from "
 /**
  * Capa "componente" del design system: un único punto de verdad para la
  * identidad visual (color categórico + icono + label) de cada fuente,
- * consumido por Sidebar, KpiCards, ProjectTable y SessionDetail.
+ * consumido por Sidebar, SourceChip, SessionDetail y RoiView.
  */
 export interface SourceMeta {
   label: string;
@@ -19,9 +19,6 @@ export const SOURCE_META: Record<string, SourceMeta> = {
   openrouter: { label: "OpenRouter", color: "var(--viz-orange)", icon: Network },
 };
 
-export function chipStyle(color: string | undefined) {
-  return {
-    color,
-    backgroundColor: `color-mix(in srgb, ${color ?? "gray"} 15%, transparent)`,
-  };
-}
+/** Filtro global de fuente (?fuente=). "all" suma las cuatro fuentes por proyecto; nunca OpenRouter. */
+export const SOURCE_KEYS = ["all", "claude_code", "codex", "opencode", "hermes", "openrouter"] as const;
+export type SourceKey = (typeof SOURCE_KEYS)[number];

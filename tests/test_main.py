@@ -1,6 +1,8 @@
+import io
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import patch
 
 from main import collect_all, combine_projects
@@ -47,6 +49,24 @@ class TestCollectAll(unittest.TestCase):
             self.assertEqual(rows, [("2026-08-01", 10)])
         finally:
             os.unlink(tmp.name)
+
+
+class TestBriefingFlag(unittest.TestCase):
+    def test_briefing_flag_collects_then_prints_summary(self):
+        fake = {"claude_code": {}, "codex": {}, "opencode": {}, "hermes": {},
+                "openrouter": {"unavailable": True, "reason": "x"}}
+        out = io.StringIO()
+        with patch("sys.argv", ["main.py", "--briefing"]), \
+             patch("main.collect_all", return_value=fake) as collect, \
+             patch("main.briefing.get_briefing", return_value={"stub": True}) as get, \
+             patch("main.briefing.format_briefing", return_value="RESUMEN") as fmt, \
+             redirect_stdout(out):
+            import main as main_module
+            main_module.main()
+        collect.assert_called_once()
+        get.assert_called_once_with()
+        fmt.assert_called_once_with({"stub": True})
+        self.assertEqual(out.getvalue().strip(), "RESUMEN")
 
 
 if __name__ == "__main__":

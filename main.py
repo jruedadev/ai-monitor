@@ -5,6 +5,7 @@ Uso:
   main.py               -> resumen en terminal (tabla, vista combinada)
   main.py --json         -> vuelca todas las fuentes crudas en JSON (stdout)
   main.py --html out.html -> genera dashboard HTML con pestañas por fuente
+  main.py --briefing   -> briefing del mes (KPIs, comparación y señales)
 """
 import argparse
 import json
@@ -13,6 +14,7 @@ from datetime import datetime, timezone
 
 from collectors import claude_code, codex, opencode, openrouter, hermes
 from dashboard import template
+import briefing
 import history
 
 
@@ -68,9 +70,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--html", metavar="OUT")
+    ap.add_argument("--briefing", action="store_true")
     args = ap.parse_args()
 
     sources = collect_all()
+    if args.briefing:
+        print(briefing.format_briefing(briefing.get_briefing()))
+        return
+
     combined = combine_projects(sources["claude_code"], sources["codex"], sources["opencode"], sources["hermes"])
 
     if args.html:

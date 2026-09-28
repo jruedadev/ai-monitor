@@ -78,7 +78,13 @@ class TestServerAPI(unittest.TestCase):
         data = json.loads(body)
         self.assertEqual(
             data,
-            {"subscription_cost_claude": None, "subscription_cost_codex": None, "hourly_rate": None},
+            {
+                "subscription_cost_claude": None,
+                "subscription_cost_codex": None,
+                "hourly_rate": None,
+                "subscription_start_claude": None,
+                "subscription_start_codex": None,
+            },
         )
 
     def test_post_roi_settings_persists_and_get_reflects_it(self):
@@ -103,10 +109,70 @@ class TestServerAPI(unittest.TestCase):
             status = e.code
         self.assertEqual(status, 400)
 
+    def test_post_roi_settings_without_json_content_type_is_415(self):
+        body = json.dumps({"hourly_rate": 40.0}).encode("utf-8")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/api/roi-settings", data=body, method="POST",
+            headers={"Content-Type": "text/plain"},
+        )
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(req, timeout=5)
+        self.assertEqual(ctx.exception.code, 415)
+
+    def test_post_roi_settings_accepts_content_type_with_charset(self):
+        body = json.dumps({"hourly_rate": 40.0}).encode("utf-8")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/api/roi-settings", data=body, method="POST",
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            self.assertEqual(resp.status, 200)
+
+    def test_post_roi_settings_rejects_unknown_key(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._post("/api/roi-settings", {"not_a_real_key": 1})
+        self.assertEqual(ctx.exception.code, 400)
+
+    def test_post_roi_settings_rejects_bool_for_numeric_key(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._post("/api/roi-settings", {"hourly_rate": True})
+        self.assertEqual(ctx.exception.code, 400)
+
+    def test_post_roi_settings_rejects_malformed_date(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._post("/api/roi-settings", {"subscription_start_claude": "15-09-2026"})
+        self.assertEqual(ctx.exception.code, 400)
+
     def test_unknown_path_falls_back_to_index_html(self):
         status, body = self._get("/some/spa/route")
         self.assertEqual(status, 200)
         self.assertIn(b"fallback", body)
+
+    def test_api_briefing_returns_empty_briefing_without_history(self):
+        status, body = self._get("/api/briefing")
+        self.assertEqual(status, 200)
+        data = json.loads(body)
+        self.assertEqual(data["source"], "all")
+        self.assertEqual(data["attention"], [])
+        self.assertEqual(data["eligible_months"], [])
+        self.assertIn("kpis", data)
+        self.assertFalse(data["degraded"])
+
+    def test_api_briefing_openrouter_source(self):
+        status, body = self._get("/api/briefing?source=openrouter")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["source"], "openrouter")
+
+    def test_api_briefing_invalid_compare_is_400_with_message(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._get("/api/briefing?compare=1999-01")
+        self.assertEqual(ctx.exception.code, 400)
+        self.assertIn("1999-01", json.loads(ctx.exception.read())["error"])
+
+    def test_api_briefing_invalid_source_is_400(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._get("/api/briefing?source=copilot")
+        self.assertEqual(ctx.exception.code, 400)
 
 
 if __name__ == "__main__":
