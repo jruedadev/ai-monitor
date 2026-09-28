@@ -1,18 +1,28 @@
 import { useCallback } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { DAY_PARAM, PROJECT_PARAM, parsePath, type DashboardLocation } from "@/lib/routes";
+import {
+  COMPARE_PARAM, DAY_PARAM, PROJECT_PARAM, SOURCE_PARAM, legacyRedirect, parsePath, parseSource, searchForSource,
+  type DashboardLocation,
+} from "@/lib/routes";
+import type { SourceKey } from "@/lib/sources";
 
 export interface DashboardRoute extends DashboardLocation {
   /** false si la ruta no existe; App redirige a "/". */
   valid: boolean;
+  /** Destino de una ruta de la estructura anterior, o null. */
+  redirect: string | null;
+  source: SourceKey;
+  compare: string | null;
   selectedDate: string | null;
   selectedProject: string | null;
   setSelectedDate: (date: string | null) => void;
   setSelectedProject: (project: string | null) => void;
+  setSource: (source: SourceKey) => void;
+  setCompare: (month: string | null) => void;
 }
 
 export function useDashboardRoute(): DashboardRoute {
-  const { pathname, state } = useLocation();
+  const { pathname, search, state } = useLocation();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const parsed = parsePath(pathname);
@@ -29,20 +39,22 @@ export function useDashboardRoute(): DashboardRoute {
     [setParams],
   );
 
-  // El día reemplaza la entrada del historial (explorar la gráfica no debe
-  // llenar el botón "Atrás"); abrir un proyecto sí la empuja, de modo que
-  // "Atrás" cierra el panel de detalle —lo esperable en móvil—.
+  // El día y el mes comparado reemplazan la entrada del historial (explorar no debe
+  // llenar el botón "Atrás"); abrir un proyecto sí la empuja, de modo que "Atrás"
+  // cierra el panel de detalle —lo esperable en móvil—.
   const setSelectedDate = useCallback((date: string | null) => setParam(DAY_PARAM, date, true), [setParam]);
+  const setCompare = useCallback((month: string | null) => setParam(COMPARE_PARAM, month, true), [setParam]);
+  const setSource = useCallback(
+    (source: SourceKey) => setParams(new URLSearchParams(searchForSource(search, source)), { replace: true }),
+    [search, setParams],
+  );
   const setSelectedProject = useCallback(
     (project: string | null) => {
       if (project) {
         setParam(PROJECT_PARAM, project, false, { openedProject: true });
       } else if ((state as { openedProject?: boolean } | null)?.openedProject) {
-        // Lo abrimos nosotros con push: volver atrás lo cierra sin dejar una
-        // entrada "con panel" a la que "Atrás" regresaría.
         navigate(-1);
       } else {
-        // Llegó por enlace directo: no hay entrada previa propia, se quita en sitio.
         setParam(PROJECT_PARAM, null, true);
       }
     },
@@ -50,12 +62,17 @@ export function useDashboardRoute(): DashboardRoute {
   );
 
   return {
-    section: parsed?.section ?? "all",
+    view: parsed?.view ?? "home",
     client: parsed?.client ?? null,
     valid: parsed !== null,
+    redirect: parsed ? null : legacyRedirect(pathname, search),
+    source: parseSource(params.get(SOURCE_PARAM)),
+    compare: params.get(COMPARE_PARAM),
     selectedDate: params.get(DAY_PARAM),
     selectedProject: params.get(PROJECT_PARAM),
     setSelectedDate,
     setSelectedProject,
+    setSource,
+    setCompare,
   };
 }

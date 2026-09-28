@@ -5,14 +5,14 @@ import {
 import { SOURCE_META } from "@/lib/sources";
 import { collectSessions, SESSION_SOURCES, type FlatSession } from "@/lib/sessions";
 import { SessionIdentity } from "@/components/SessionIdentity";
-import type { SectionKey } from "@/lib/routes";
+import type { SourceKey } from "@/lib/sources";
 import type { UsageSnapshot } from "@/lib/api";
 import { clientOf } from "@/lib/clients";
 import { formatDate, formatInt, formatUsd } from "@/lib/format";
 
 interface SessionDetailProps {
   sources: UsageSnapshot["sources"] | null | undefined;
-  section: SectionKey;
+  section: SourceKey;
   clientFilter?: string | null;
   selectedDate: string | null;
   onSelectDate: (date: string | null) => void;

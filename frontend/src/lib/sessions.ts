@@ -1,4 +1,4 @@
-import type { SectionKey } from "@/lib/routes";
+import type { SourceKey } from "@/lib/sources";
 import type { SessionDetailEntry, UsageSnapshot } from "@/lib/api";
 
 export interface FlatSession extends SessionDetailEntry {
@@ -11,13 +11,11 @@ export const SESSION_SOURCES = ["claude_code", "codex", "opencode", "hermes"] as
 
 export function collectSessions(
   sources: UsageSnapshot["sources"] | null | undefined,
-  section: SectionKey,
+  section: SourceKey,
   project?: string,
 ): FlatSession[] {
   if (!sources) return [];
-  const sourceKeys = section === "all"
-    ? SESSION_SOURCES
-    : section === "openrouter" || section === "roi" ? [] : ([section] as const);
+  const sourceKeys = section === "all" ? SESSION_SOURCES : section === "openrouter" ? [] : ([section] as const);
 
   const rows: FlatSession[] = [];
   for (const key of sourceKeys) {

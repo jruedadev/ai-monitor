@@ -8,12 +8,12 @@ import { SOURCE_META } from "@/lib/sources";
 import { clientOf } from "@/lib/clients";
 import { formatCompact, formatDate, formatDayShort } from "@/lib/format";
 import type { HistoryResponse } from "@/lib/api";
-import type { SectionKey } from "@/lib/routes";
+import type { SourceKey } from "@/lib/sources";
 
 const HISTORY_DAYS = 90;
 
 interface TrendChartProps {
-  section: SectionKey;
+  section: SourceKey;
   clientFilter?: string | null;
   selectedDate?: string | null;
   onSelectDate?: (date: string | null) => void;
@@ -27,7 +27,7 @@ interface ChartPoint {
   Tokens: number;
 }
 
-function buildSeries(data: HistoryResponse, section: SectionKey, clientFilter?: string | null): ChartPoint[] {
+function buildSeries(data: HistoryResponse, section: SourceKey, clientFilter?: string | null): ChartPoint[] {
   const byDate: Record<string, number> = {};
   if (section === "openrouter") {
     for (const row of data.daily_model) {
@@ -76,8 +76,6 @@ export function TrendChart({ section, clientFilter, selectedDate, onSelectDate }
       </div>
     );
   };
-
-  if (section === "roi") return null;
 
   const sourceMeta = section !== "all" ? SOURCE_META[section] : undefined;
   // El color sigue a la entidad: la línea de una fuente usa su color de identidad;

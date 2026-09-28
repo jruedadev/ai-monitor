@@ -8,12 +8,12 @@ import { SourceChip } from "@/components/SourceChip";
 import { formatCompact, formatInt, formatUsd } from "@/lib/format";
 import { collectSessions } from "@/lib/sessions";
 import { SessionIdentity } from "@/components/SessionIdentity";
-import type { SectionKey } from "@/lib/routes";
+import type { SourceKey } from "@/lib/sources";
 import type { UsageSnapshot } from "@/lib/api";
 
 interface ProjectDetailSheetProps {
   sources: UsageSnapshot["sources"] | null | undefined;
-  section: SectionKey;
+  section: SourceKey;
   project: string | null;
   onClose: () => void;
 }
