@@ -4,7 +4,7 @@ import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command";
 import type { ProjectUsage, UsageSnapshot } from "@/lib/api";
-import { COMMAND_GROUPS, buildCommandEntries } from "@/lib/commands";
+import { COMMAND_GROUPS, buildCommandEntries, type CommandEntry } from "@/lib/commands";
 import { withSource } from "@/lib/routes";
 
 interface CommandPaletteProps {
@@ -19,9 +19,9 @@ export function CommandPalette({ open, onOpenChange, sources, combined }: Comman
   const { search } = useLocation();
   const entries = useMemo(() => buildCommandEntries(sources, combined), [sources, combined]);
 
-  const go = (to: string) => {
+  const go = (entry: CommandEntry) => {
     onOpenChange(false);
-    navigate(withSource(to, search));
+    navigate(entry.keepSource === false ? entry.to : withSource(entry.to, search));
   };
 
   return (
@@ -35,7 +35,7 @@ export function CommandPalette({ open, onOpenChange, sources, combined }: Comman
           return (
             <CommandGroup key={group} heading={group}>
               {items.map((e) => (
-                <CommandItem key={e.id} value={`${e.label} ${e.keywords.join(" ")} ${e.id}`} onSelect={() => go(e.to)}>
+                <CommandItem key={e.id} value={`${e.label} ${e.keywords.join(" ")} ${e.id}`} onSelect={() => go(e)}>
                   <span className="truncate">{e.label}</span>
                   {e.hint && <span className="ml-auto truncate pl-3 font-mono text-xs text-muted-foreground">{e.hint}</span>}
                 </CommandItem>

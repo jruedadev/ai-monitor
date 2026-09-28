@@ -1,9 +1,9 @@
 import type { ProjectUsage, UsageSnapshot } from "@/lib/api";
 import { clientOf, groupProjectsByClient } from "@/lib/clients";
 import { formatDate } from "@/lib/format";
-import { viewPath, type ViewKey } from "@/lib/routes";
+import { sourceSlug, viewPath, type ViewKey } from "@/lib/routes";
 import { collectSessions } from "@/lib/sessions";
-import { SOURCE_META } from "@/lib/sources";
+import { SOURCE_META, type SourceKey } from "@/lib/sources";
 import { basename } from "@/lib/tree";
 
 export const COMMAND_GROUPS = ["Vistas", "Clientes", "Proyectos", "Sesiones"] as const;
@@ -15,6 +15,8 @@ export interface CommandEntry {
   hint?: string;
   to: string;
   keywords: string[];
+  /** false = no heredar el ?fuente= actual (CommandPalette navega a `to` tal cual). */
+  keepSource?: boolean;
 }
 
 const VIEWS: { view: ViewKey; label: string; keywords: string[] }[] = [
@@ -49,6 +51,9 @@ export function buildCommandEntries(
       hint: path,
       to: `${viewPath("projects", clientOf(path))}?proyecto=${encodeURIComponent(path)}`,
       keywords: [path, clientOf(path)],
+      // Un proyecto puede no tener uso en la fuente filtrada actual (?fuente=): abrir sin
+      // heredarla evita un ProjectDetailSheet vacío.
+      keepSource: false,
     });
   }
 
@@ -62,7 +67,9 @@ export function buildCommandEntries(
       group: "Sesiones",
       label: s.title as string,
       hint: `${SOURCE_META[s.source].label} · ${formatDate(s.date as string)}`,
-      to: `/actividad?dia=${s.date}`,
+      // La sesión lleva su propia fuente en el link: sin esto, abrir una sesión de Codex
+      // desde ?fuente=hermes quedaría filtrado a Hermes vía withSource (no la sobreescribe).
+      to: `/actividad?dia=${s.date}&fuente=${sourceSlug(s.source as SourceKey)}`,
       keywords: [s.project],
     });
   }
