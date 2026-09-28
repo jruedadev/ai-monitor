@@ -49,7 +49,7 @@ recommend/
   engine.py          # orquesta una corrida completa con lock
 ```
 
-Flujo de una corrida: `lock` → leer prompts (30 días) → redactar → clusterizar → top 10 → LLM (o heurística) → señales de costo → `store.upsert` en una transacción → registrar `recommendation_runs` → publicar evento SSE (si corre dentro de `server.py`) → liberar lock.
+Flujo de una corrida: `lock` → leer prompts (30 días) → redactar → candidatos léxicos (top 40) → LLM agrupa por significado y redacta (o, sin LLM, clusters solo léxicos + heurística) → umbrales y top 10 en local → señales de costo → `store.upsert` en una transacción → registrar `recommendation_runs` → publicar evento SSE (si corre dentro de `server.py`) → liberar lock.
 
 ### 3.1 Lectores de prompts (`recommend/prompts/`)
 
@@ -86,11 +86,13 @@ Se aplica a todo texto antes de clusterizar y otra vez al `draft` devuelto por e
 
 - Normalización: minúsculas, sin acentos, sin puntuación, sin stopwords (es/en).
 - Trigramas de palabras; similitud de Jaccard con índice invertido para no comparar todos contra todos.
-- Se unen los pares con similitud ≥0,5 (union-find).
-- Un cluster es válido con **≥3 sesiones distintas** y **≥2 días distintos**.
-- Se ordenan por `sesiones × tokens` (tokens de esas sesiones según la fuente) y pasan los **10 primeros**.
+- **Dos modos**, según haya LLM disponible:
+  - **Candidatos para agrupación semántica** (backend `hermes`/`claude`): se unen los pares con similitud ≥0,3 (union-find); un candidato necesita **≥2 sesiones distintas**; pasan los **40** con más tokens.
+  - **Solo léxico** (backend `none` o cadena LLM agotada): se unen los pares con similitud ≥0,5; un cluster es válido con **≥3 sesiones distintas** y **≥2 días distintos**; se ordenan por `sesiones × tokens` y pasan los **10 primeros**.
+- La agrupación por significado la hace el LLM sobre los candidatos (§3.5). Los umbrales definitivos (≥3 sesiones, ≥2 días, top 10 por `sesiones × tokens`) se aplican siempre en local sobre el grupo final.
+- Límite conocido: un prompt que aparece una sola vez sin parecido léxico con otro no llega como candidato; la agrupación semántica une grupos que ya se repiten.
 - Features deterministas por cluster: `pega_datos` (bloques largos, logs, JSON o stacktraces pegados), `menciona_servicio` (lista cerrada: jira, github, gitlab, sentry, slack, notion, linear, confluence, figma, etc.) y `mismos_pasos` (secuencias de verbos imperativos que se repiten).
-- `cluster_id` es estable dentro de la corrida (`c1`…`c10`); la identidad entre corridas la da la firma (§4.2).
+- `cluster_id` es estable dentro de la corrida (`c1`…`c40`); la identidad entre corridas la da la firma (§4.2). Las features de un grupo son el OR de las de sus miembros.
 
 ### 3.4 Señales de costo (`recommend/cost.py`)
 
@@ -99,13 +101,15 @@ Reutiliza `briefing.load()` + `briefing.RULES` por cada fuente. Se persisten com
 ### 3.5 Capa LLM (`recommend/llm.py`)
 
 - **Backends:** `hermes` (por defecto), `claude` (`claude -p`, opcional) y `none` (solo heurística local).
-- **Una sola llamada por corrida** con los 10 clusters como JSON (patrón, sesiones, días, tokens, features, hasta 3 fragmentos redactados).
-- **El LLM solo clasifica y redacta.** Tokens, impacto y evidencia se calculan en local y de forma determinista.
+- **Una sola llamada por corrida** con hasta 40 candidatos como JSON (patrón, sesiones, días, tokens, features, hasta 3 fragmentos redactados). El LLM hace dos cosas en esa llamada: **agrupa por significado** los candidatos que expresan la misma intención y **clasifica y redacta** una recomendación por grupo.
+- **El LLM no calcula nada.** Umbrales, tokens, impacto y evidencia se calculan en local y de forma determinista sobre los grupos resultantes.
 - **Contrato de salida:**
   ```json
-  {"recommendations":[{"cluster_id":"c1","kind":"skill|plugin|prompt","pattern":"…","description":"…","draft":"…"}]}
+  {"groups":[{"group_id":"g1","members":["c3","c7","c12"]}],
+   "recommendations":[{"group_id":"g1","kind":"skill|plugin|prompt","pattern":"…","description":"…","draft":"…"}]}
   ```
-- **Validación (dato no confiable):** `cluster_id` debe existir entre los enviados (si no, se descarta la entrada); `kind` en la lista permitida; recortes `pattern` ≤120, `description` ≤400, `draft` ≤8000 caracteres; `draft` se redacta de nuevo. Nada se ejecuta ni se interpreta como HTML.
+- **Validación de `groups`:** cada `members` debe contener solo `cluster_id` enviados, sin repetir un candidato entre grupos; un grupo inválido se descarta entero. Los candidatos que no aparecen en ningún grupo válido forman grupo propio. Después se aplican en local los umbrales definitivos (≥3 sesiones, ≥2 días) y el top 10 por `sesiones × tokens`; las recomendaciones de grupos que no pasan se descartan.
+- **Validación de `recommendations` (dato no confiable):** `group_id` debe existir entre los grupos válidos (si no, se descarta la entrada); un grupo que pasa los umbrales pero no tiene recomendación del LLM se completa con la heurística local; `kind` en la lista permitida; recortes `pattern` ≤120, `description` ≤400, `draft` ≤8000 caracteres; `draft` se redacta de nuevo. Nada se ejecuta ni se interpreta como HTML.
 - **Cadena de modelos** en `engine_settings.llm_chain`, lista ordenada `proveedor:modelo`. Por defecto:
   1. `nous:stealth/space-bunny-alpha`
   2. `nous:upstage/solar-pro4:free`
@@ -134,7 +138,7 @@ Los modelos `stealth/` son temporales; por eso la cadena es configurable y no es
 
 ### 3.6 Heurística local (`recommend/heuristics.py`)
 
-Sin LLM: `menciona_servicio` + `pega_datos` → `plugin`; `mismos_pasos` → `skill`; `pega_datos` sin servicio → `prompt`; resto → `prompt`. `description` y `draft` salen de plantillas en español con los datos del cluster. `generator = "reglas"`.
+Se usa cuando no hay LLM (con la agrupación solo léxica de §3.3) y para completar grupos sin recomendación del LLM. Reglas: `menciona_servicio` + `pega_datos` → `plugin`; `mismos_pasos` → `skill`; `pega_datos` sin servicio → `prompt`; resto → `prompt`. `description` y `draft` salen de plantillas en español con los datos del cluster. `generator = "reglas"`.
 
 ## 4. Persistencia (`history.db`)
 
@@ -186,6 +190,7 @@ Mapeo al esquema del spec externo: `fecha`→`first_seen`/`last_seen`, `herramie
 
 ### 4.2 Identidad y ciclo de vida
 
+- **Firma de un grupo:** unión de las firmas (trigramas representativos) de sus candidatos; así, si otra corrida agrupa algo distinto, sigue reconociéndose.
 - **Misma recomendación:** similitud de Jaccard entre firmas ≥0,5 (para `costo`, igualdad exacta de regla+fuente+proyecto). Se actualizan `last_seen`, `tokens`, `evidence` e `impact`; el `id` se conserva.
 - **Impacto** (local, determinista): proporción de `tokens` del cluster sobre el total de 30 días de su fuente — alto ≥10 %, medio ≥3 %, bajo el resto. Para `costo` lo fija la regla (`warning` → alto, `info` → medio).
 - **`saltada`** queda oculta aunque el patrón reaparezca (solo se actualiza `last_seen`).
@@ -248,7 +253,8 @@ TDD con `unittest` (backend) y vitest (frontend). Todos los fixtures son sintét
 
 - `prompts/*`: JSONL de Claude Code y Codex, SQLite temporal de OpenCode y Hermes; filtro <20, truncado, ventana UTC, autoexclusión, degradación.
 - `redact`: tabla de casos (secretos, correos, rutas, URLs con query, IPs).
-- `cluster`: umbrales (Jaccard ≥0,5, ≥3 sesiones, ≥2 días, top 10) y features.
+- `cluster`: modo candidatos (Jaccard ≥0,3, ≥2 sesiones, top 40) y modo solo léxico (Jaccard ≥0,5, ≥3 sesiones, ≥2 días, top 10); features y OR de features por grupo.
+- Agrupación semántica: `groups` válidos e inválidos (miembro inexistente, candidato repetido), candidatos huérfanos como grupo propio, umbrales aplicados tras unir, firma como unión; fixture con prompts sinónimos que solo se unen vía `groups` del runner falso.
 - `llm`: runner falso; JSON válido e inválido, timeout, costo > 0, respaldo, cadena agotada → `reglas`, regla de solo free.
 - `store`: dedupe por firma, `saltada` oculta, `resuelta` automática de costo, nunca se borra, rollback.
 - `cost`: mapeo de señales de `briefing.RULES` a recomendaciones.
@@ -263,6 +269,6 @@ TDD con `unittest` (backend) y vitest (frontend). Todos los fixtures son sintét
 
 - Instalar o escribir la skill/plugin sugerido: el usuario copia el borrador.
 - Análisis de OpenRouter (no tiene prompts locales).
-- Embeddings o clustering semántico; la similitud es léxica.
+- Embeddings (no hay runtime local y un servicio remoto recibiría el texto de todos los prompts); la agrupación semántica la hace el LLM sobre candidatos léxicos. Candidato para v2 con un modelo local.
 - Varias llamadas al LLM por corrida o agentes multi-paso.
 - Medir el ahorro real tras aplicar una recomendación (candidato para una v2).
