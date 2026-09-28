@@ -213,5 +213,40 @@ class TestHistory(unittest.TestCase):
         self.assertEqual(settings["hourly_rate"], 40.0)
 
 
+class TestValidateRoiSettings(unittest.TestCase):
+    def test_accepts_valid_numbers_dates_and_nulls(self):
+        history.validate_roi_settings({
+            "subscription_cost_claude": 20.0,
+            "subscription_cost_codex": 0,
+            "hourly_rate": None,
+            "subscription_start_claude": "2026-09-15",
+            "subscription_start_codex": None,
+        })  # no debe lanzar
+
+    def test_rejects_non_dict_body(self):
+        with self.assertRaises(history.RoiSettingsError):
+            history.validate_roi_settings([1, 2, 3])
+
+    def test_rejects_unknown_key(self):
+        with self.assertRaises(history.RoiSettingsError):
+            history.validate_roi_settings({"not_a_real_key": 1})
+
+    def test_rejects_bool_for_numeric_key(self):
+        with self.assertRaises(history.RoiSettingsError):
+            history.validate_roi_settings({"hourly_rate": True})
+
+    def test_rejects_string_for_numeric_key(self):
+        with self.assertRaises(history.RoiSettingsError):
+            history.validate_roi_settings({"subscription_cost_claude": "20"})
+
+    def test_rejects_malformed_date(self):
+        with self.assertRaises(history.RoiSettingsError):
+            history.validate_roi_settings({"subscription_start_claude": "15-09-2026"})
+
+    def test_rejects_numeric_date(self):
+        with self.assertRaises(history.RoiSettingsError):
+            history.validate_roi_settings({"subscription_start_claude": 20260915.0})
+
+
 if __name__ == "__main__":
     unittest.main()

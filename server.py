@@ -90,6 +90,11 @@ def make_handler(static_dir, broker, db_path=None):
             parsed = urlparse(self.path)
 
             if parsed.path == "/api/roi-settings":
+                content_type = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+                if content_type != "application/json":
+                    self.send_response(415)
+                    self.end_headers()
+                    return
                 length = int(self.headers.get("Content-Length", 0))
                 body = self.rfile.read(length)
                 try:
@@ -98,9 +103,10 @@ def make_handler(static_dir, broker, db_path=None):
                     self.send_response(400)
                     self.end_headers()
                     return
-                if not isinstance(settings, dict):
-                    self.send_response(400)
-                    self.end_headers()
+                try:
+                    history.validate_roi_settings(settings)
+                except history.RoiSettingsError as exc:
+                    self._send_json(json.dumps({"error": str(exc)}), status=400)
                     return
                 history.save_roi_settings(settings, db_path=db_path)
                 self._send_json(json.dumps(history.get_roi_settings(db_path=db_path)))

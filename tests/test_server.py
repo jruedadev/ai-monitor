@@ -109,6 +109,40 @@ class TestServerAPI(unittest.TestCase):
             status = e.code
         self.assertEqual(status, 400)
 
+    def test_post_roi_settings_without_json_content_type_is_415(self):
+        body = json.dumps({"hourly_rate": 40.0}).encode("utf-8")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/api/roi-settings", data=body, method="POST",
+            headers={"Content-Type": "text/plain"},
+        )
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(req, timeout=5)
+        self.assertEqual(ctx.exception.code, 415)
+
+    def test_post_roi_settings_accepts_content_type_with_charset(self):
+        body = json.dumps({"hourly_rate": 40.0}).encode("utf-8")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/api/roi-settings", data=body, method="POST",
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            self.assertEqual(resp.status, 200)
+
+    def test_post_roi_settings_rejects_unknown_key(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._post("/api/roi-settings", {"not_a_real_key": 1})
+        self.assertEqual(ctx.exception.code, 400)
+
+    def test_post_roi_settings_rejects_bool_for_numeric_key(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._post("/api/roi-settings", {"hourly_rate": True})
+        self.assertEqual(ctx.exception.code, 400)
+
+    def test_post_roi_settings_rejects_malformed_date(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._post("/api/roi-settings", {"subscription_start_claude": "15-09-2026"})
+        self.assertEqual(ctx.exception.code, 400)
+
     def test_unknown_path_falls_back_to_index_html(self):
         status, body = self._get("/some/spa/route")
         self.assertEqual(status, 200)

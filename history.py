@@ -2,6 +2,7 @@
 allá de la ventana de retención de cada proveedor). SQLite, stdlib only.
 """
 import os
+import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
@@ -146,6 +147,35 @@ def get_roi_settings(db_path=None):
     con.close()
 
     return {key: rows.get(key) for key in ROI_SETTINGS_KEYS}
+
+
+class RoiSettingsError(ValueError):
+    """Payload inválido para /api/roi-settings; server.py lo traduce a HTTP 400."""
+
+
+_ROI_NUMBER_KEYS = ("subscription_cost_claude", "subscription_cost_codex", "hourly_rate")
+_ROI_DATE_KEYS = ("subscription_start_claude", "subscription_start_codex")
+_ROI_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def validate_roi_settings(settings):
+    """Valida el payload de /api/roi-settings contra el allowlist de ROI_SETTINGS_KEYS.
+    No escribe nada; lanza RoiSettingsError con el primer problema encontrado."""
+    if not isinstance(settings, dict):
+        raise RoiSettingsError("El cuerpo debe ser un objeto JSON")
+    for key, value in settings.items():
+        if key not in ROI_SETTINGS_KEYS:
+            raise RoiSettingsError(f"Clave desconocida: {key}")
+        if key in _ROI_NUMBER_KEYS:
+            if value is None:
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise RoiSettingsError(f"{key} debe ser numérico o null")
+        elif key in _ROI_DATE_KEYS:
+            if value is None:
+                continue
+            if not isinstance(value, str) or not _ROI_DATE_RE.match(value):
+                raise RoiSettingsError(f"{key} debe tener formato YYYY-MM-DD o null")
 
 
 def save_roi_settings(settings, db_path=None):
