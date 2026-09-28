@@ -2326,7 +2326,12 @@ class TestRunLlm(unittest.TestCase):
         result = self.run_chain(runner, backend="claude")
         self.assertEqual((result["ok"], result["model"], result["attempts"], result["llm_tokens"], result["llm_cost"]),
                          (True, "claude", 1, 100, 0.12))
-        self.assertEqual(runner.calls[0], ["claude", "-p", runner.calls[0][2], "--output-format", "json"])
+        args = runner.calls[0]
+        self.assertEqual(args[:2], ["claude", "-p"])
+        # args[2] es el prompt con los candidatos (variable, no se compara literal)
+        self.assertEqual(args[3:], ["--output-format", "json", "--model", "sonnet", "--tools", "",
+                                     "--strict-mcp-config", "--disable-slash-commands",
+                                     "--setting-sources", "", "--system-prompt", llm.CLAUDE_SYSTEM_PROMPT])
 
     def test_claude_backend_error_does_not_retry(self):
         runner = FakeRunner(("raw", json.dumps({"is_error": True, "result": "límite"}), None))
@@ -2357,6 +2362,13 @@ from recommend.settings import is_free, parse_entry
 KINDS = ("skill", "plugin", "prompt")
 TIMEOUT_SECONDS = 120
 LIMITS = {"pattern": 120, "description": 400, "draft": 8000}
+# El backend "claude" corre como llamada aislada y barata: sin herramientas, sin
+# hooks/MCP/CLAUDE.md del usuario, sin slash commands y en Sonnet (no hereda el
+# modelo por defecto de la sesión interactiva). Ver análisis de costo del
+# subproyecto 3: sin estas flags, cada corrida heredaba ~30-40k tokens de
+# sobrecarga del system prompt completo de Claude Code.
+CLAUDE_SYSTEM_PROMPT = ("Analizas prompts repetidos de un desarrollador y devuelves "
+                        "únicamente el objeto JSON pedido, sin texto adicional.")
 
 INSTRUCTIONS = """Eres un asistente que analiza patrones repetidos en los prompts de un desarrollador.
 Recibes una lista JSON de candidatos. Cada uno resume prompts parecidos: id, patrón, sesiones, días,
@@ -2511,7 +2523,10 @@ def _hermes_attempt(prompt, entry, runner, cwd):
 
 
 def _claude_attempt(prompt, runner, cwd):
-    stdout = _call(runner, ["claude", "-p", prompt, "--output-format", "json"], cwd)
+    stdout = _call(runner, ["claude", "-p", prompt, "--output-format", "json",
+                            "--model", "sonnet", "--tools", "", "--strict-mcp-config",
+                            "--disable-slash-commands", "--setting-sources", "",
+                            "--system-prompt", CLAUDE_SYSTEM_PROMPT], cwd)
     try:
         envelope = json.loads(stdout)
     except ValueError:
@@ -2554,6 +2569,18 @@ Esperado: PASS.
 git add recommend/llm.py tests/test_recommend_llm.py
 git commit -m "feat(recommend): capa LLM con Hermes free, claude -p, cadena de respaldo y validación"
 ```
+
+- [ ] **Paso 6: verificar manualmente que `--setting-sources ""` no rompe la autenticación**
+
+Antes de dar la tarea por terminada, correr una vez fuera de los tests:
+
+```bash
+claude -p "responde solo con el JSON {\"ok\":true}" --output-format json --model sonnet \
+  --tools "" --strict-mcp-config --disable-slash-commands --setting-sources "" \
+  --system-prompt "Responde solo JSON."
+```
+
+Si falla por autenticación o por una flag no reconocida en la versión de `claude` instalada, anotarlo en el reporte (`DONE_WITH_CONCERNS`) con la salida exacta — no se ajusta el código sin decisión del orquestador.
 
 ---
 
@@ -3063,6 +3090,166 @@ git commit -m "feat(recommend): orquestador con lock, corrida completa y CLI"
 ```
 
 ---
+
+### Tarea 8 bis: no reenviar al LLM los clusters ya recomendados
+
+**Motivación (análisis de costo del subproyecto 3):** a partir de la segunda
+corrida, `_analyze` vuelve a mandar TODOS los candidatos al LLM aunque ya
+tengan una recomendación vigente con el mismo `signature`. Esto recorta
+tokens en cada corrida después de la primera, con cualquier backend, sin
+cambiar el texto ya redactado de las recomendaciones que no cambiaron.
+
+**Archivos:**
+- Modificar: `recommend/engine.py`
+- Test: `tests/test_recommend_engine.py` (añadir casos, no reescribir los existentes)
+
+**Diseño:**
+- `clustering.candidates(...)` ya asigna a cada candidato individual un
+  `signature` propio (el mismo campo que `_pattern_rec` guarda como
+  `sorted(c.signature)` tras el merge). Antes de llamar al LLM, comparar el
+  `signature` de cada candidato SIN mezclar contra las firmas de
+  `store.list_recommendations(db_path, "todas")` cuyo `generator` no sea
+  `"reglas"` (una recomendación por reglas no cuenta como "ya decidida por
+  el LLM").
+- Solo se reutiliza el texto cuando el `signature` coincide EXACTO y el
+  candidato no terminó agrupado con otros en `lexical_clusters` (si el
+  agrupador léxico ya lo fusionó con algo nuevo, ese cluster fusionado es
+  candidato nuevo y sí va al LLM — no hay reutilización parcial).
+- Implementar `_known_signatures(db_path) -> dict[tuple, dict]` que devuelve
+  `{tuple(sorted(rec["signature"])): rec for rec in ... if rec.get("signature") and rec.get("generator") != "reglas"}`.
+- En `_analyze`, tras construir `cands = clustering.candidates(...)`, separar:
+  `reused = [c for c in cands if tuple(sorted(c.signature)) in known]` y
+  `new_cands = [c for c in cands if c not in reused]`. Solo `new_cands` va a
+  `llm.run_llm`. Los `reused` entran directo a `groups` (vía
+  `clustering.rank_final`, igual que los del LLM) y sus `texts[c.cluster_id]`
+  se llenan con los campos `kind/pattern/description/draft` de la
+  recomendación conocida — el `generator` que se guarda para ellos es el
+  `generator` original de esa recomendación (no `"reglas"` ni el modelo de
+  esta corrida), para que quede claro en el historial que el texto es
+  reciclado.
+- Si `new_cands` queda vacío pero `reused` no, **no llamar al LLM en
+  absoluto** (mismo criterio que `test_no_prompts_skips_llm`).
+
+- [ ] **Paso 1: extender el test que falla**
+
+Añadir a `tests/test_recommend_engine.py`, dentro de `TestRun`:
+
+```python
+    def test_reuses_known_signature_without_calling_llm(self):
+        tokens = self.synonyms_fixture()
+        self.run_engine(hermes_runner(GROUPED), tokens)  # primera corrida: crea la recomendación
+
+        def never(*_):
+            raise AssertionError("no debe llamarse al LLM: el signature ya está recomendado")
+        run_id, status = self.run_engine(never, tokens)
+        self.assertEqual(status, "ok")
+        self.assertEqual(store.get_run(self.db, run_id)["attempts"], 0)
+        [rec] = store.list_recommendations(self.db)
+        self.assertEqual(rec["generator"], "nous:stealth/space-bunny-alpha")  # se conserva, no "reglas"
+
+    def test_mixed_known_and_new_signatures_only_sends_new_to_llm(self):
+        tokens = self.synonyms_fixture()
+        self.run_engine(hermes_runner(GROUPED), tokens)  # conoce A+B fusionados
+        write_session(self.cc_root, "c1", "despliega el servicio de facturación en producción", "2026-09-23")
+        write_session(self.cc_root, "c2", "haz el deploy del servicio de facturación a producción", "2026-09-23")
+        tokens.update({("claude_code", "c1"): 2000, ("claude_code", "c2"): 2000})
+        NEW_GROUPED = {"groups": [{"group_id": "g1", "members": ["c3"]}],
+                       "recommendations": [{"group_id": "g1", "kind": "prompt", "pattern": "Desplegar facturación",
+                                            "description": "Se repite.", "draft": "Añade esto a AGENTS.md"}]}
+        run_id, status = self.run_engine(hermes_runner(NEW_GROUPED), tokens)
+        self.assertEqual(status, "ok")
+        self.assertEqual(store.get_run(self.db, run_id)["attempts"], 1)
+        self.assertEqual(len(store.list_recommendations(self.db)), 2)
+```
+
+- [ ] **Paso 2: correr el test y verificar que falla**
+
+Run: `python3 -m unittest tests.test_recommend_engine.TestRun -v`
+Esperado: FAIL en los dos casos nuevos (el LLM se sigue llamando siempre).
+
+- [ ] **Paso 3: implementar**
+
+Editar `recommend/engine.py`:
+
+```python
+def _known_signatures(db_path):
+    """signature (tupla ordenada) -> recomendación vigente, solo las que ya
+    pasaron por un LLM real (no por reglas), para no reenviarlas."""
+    out = {}
+    for rec in store.list_recommendations(db_path, "todas"):
+        sig = rec.get("signature")
+        if sig and rec.get("generator") and rec["generator"] != "reglas":
+            out[tuple(sorted(sig))] = rec
+    return out
+```
+
+En `_analyze`, reemplazar el bloque que arma `cands`/`groups` para el caso
+`settings["backend"] != "none"`:
+
+```python
+    else:
+        cands = clustering.candidates(prompts, session_tokens)
+        groups = []
+        if cands:
+            known = _known_signatures(db_path)
+            reused = [c for c in cands if tuple(sorted(c.signature)) in known]
+            new_cands = [c for c in cands if c not in reused]
+            result = None
+            if new_cands:
+                result = llm.run_llm(new_cands, settings["backend"], settings["llm_chain"],
+                                     runner=runner, cwd=engine_dir)
+                fields.update(attempts=result["attempts"], llm_tokens=result["llm_tokens"],
+                             llm_cost=result["llm_cost"])
+                errors.extend(result["errors"])
+            reused_groups = [clustering.merge([c], c.cluster_id) for c in reused]
+            for c in reused:
+                rec = known[tuple(sorted(c.signature))]
+                texts[c.cluster_id] = {"kind": rec["kind"], "pattern": rec["pattern"],
+                                       "description": rec["description"], "draft": rec["draft"]}
+                generators[c.cluster_id] = rec["generator"]
+            if result is None or result["ok"]:
+                if result is not None:
+                    fields["model"] = result["model"]
+                    by_id = {c.cluster_id: c for c in new_cands}
+                    grouped = llm.validate_groups(result["data"], list(by_id))
+                    merged = [clustering.merge([by_id[m] for m in members], gid)
+                             for gid, members in grouped.items()]
+                    texts.update(llm.validate_recommendations(result["data"], set(grouped)))
+                else:
+                    merged = []
+                groups = clustering.rank_final(merged + reused_groups)
+            else:
+                groups, degraded = clustering.lexical_clusters(prompts, session_tokens), True
+```
+
+Añadir `generators = {}` junto a `texts, degraded = {}, False` al inicio de
+`_analyze`, y en `_pattern_rec` usar `generators.get(c.cluster_id, model)`
+en vez de `model` cuando esté presente:
+
+```python
+def _pattern_rec(c, texts, generator_override, model, totals):
+    generator = generator_override or (model if texts else "reglas")
+    ...
+```
+
+(ajustar la llamada en `_analyze` para pasar `generators.get(c.cluster_id)`).
+
+- [ ] **Paso 4: correr el test y verificar que pasa**
+
+Run: `python3 -m unittest tests.test_recommend_engine -v`
+Esperado: PASS, incluidos los dos casos nuevos.
+
+- [ ] **Paso 5: correr toda la suite**
+
+Run: `python3 -m unittest discover -s tests 2>&1 | tail -3`
+Esperado: `OK`.
+
+- [ ] **Paso 6: commit**
+
+```bash
+git add recommend/engine.py tests/test_recommend_engine.py
+git commit -m "perf(recommend): no reenviar al LLM clusters con signature ya recomendado"
+```
 
 ---
 
