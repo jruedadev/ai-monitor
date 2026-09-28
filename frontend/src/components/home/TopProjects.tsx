@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import type { BriefingProject } from "@/lib/api";
 import { formatUsd } from "@/lib/format";
-import { PROJECT_PARAM, clientPath, withSource } from "@/lib/routes";
+import { withSource } from "@/lib/routes";
 import { basename } from "@/lib/tree";
 
 export function TopProjects({ projects, search }: { projects: BriefingProject[]; search: string }) {
@@ -14,9 +14,7 @@ export function TopProjects({ projects, search }: { projects: BriefingProject[];
         <ol className="mt-4 space-y-3">
           {projects.map((p) => {
             const pct = Math.round(p.share * 100);
-            const params = new URLSearchParams();
-            params.set(PROJECT_PARAM, p.project);
-            const href = `${clientPath(p.client)}?${params}`;
+            const href = `/proyectos/${encodeURIComponent(p.client)}?proyecto=${encodeURIComponent(p.project)}`;
             return (
               <li key={p.project}>
                 <Link to={withSource(href, search)} className="-m-2 block rounded-lg p-2 hover:bg-muted">
