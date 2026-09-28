@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, Check, Save, Scale } from "lucide-react";
+import { AlertCircle, Scale } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 import {
   fetchHistory,
   fetchRoiSettings,
-  saveRoiSettings,
   type DailyProjectRow,
   type RoiSettings,
   type UsageSnapshot,
@@ -13,6 +13,7 @@ import { computeSourceRoi, type CostComparison } from "@/lib/roi";
 import { SOURCE_META } from "@/lib/sources";
 import { clientOf, groupProjectsByClient } from "@/lib/clients";
 import { formatDate, formatDecimal, formatMonth, formatUsd } from "@/lib/format";
+import { withSource } from "@/lib/routes";
 
 interface RoiViewProps {
   sources: UsageSnapshot["sources"] | null;
@@ -32,30 +33,15 @@ const SUBSCRIPTION_START_KEY: Record<RoiSource, "subscription_start_claude" | "s
 };
 
 export function RoiView({ sources }: RoiViewProps) {
+  const { search } = useLocation();
   const [settings, setSettings] = useState<RoiSettings | null>(null);
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [scopeFilter, setScopeFilter] = useState<string>("");
   const [historyRows, setHistoryRows] = useState<DailyProjectRow[]>([]);
 
   useEffect(() => {
-    fetchRoiSettings()
-      .then((s) => {
-        setSettings(s);
-        setDraft({
-          subscription_cost_claude: s.subscription_cost_claude?.toString() ?? "",
-          subscription_cost_codex: s.subscription_cost_codex?.toString() ?? "",
-          hourly_rate: s.hourly_rate?.toString() ?? "",
-          subscription_start_claude: s.subscription_start_claude ?? "",
-          subscription_start_codex: s.subscription_start_codex ?? "",
-        });
-      })
-      .catch((err: Error) => setLoadError(err.message));
+    fetchRoiSettings().then(setSettings).catch((err: Error) => setLoadError(err.message));
   }, []);
-
-  // Cualquier edición posterior invalida el "Cambios guardados" / error anterior.
-  useEffect(() => setSaveStatus("idle"), [draft]);
 
   const earliestStart = [settings?.subscription_start_claude, settings?.subscription_start_codex]
     .filter((d): d is string => Boolean(d))
@@ -71,24 +57,6 @@ export function RoiView({ sources }: RoiViewProps) {
       .then((data) => setHistoryRows(data.daily_project))
       .catch((err) => console.error("Error al cargar /api/history para ROI:", err));
   }, [earliestStart]);
-
-  const handleSave = async () => {
-    setSaveStatus("saving");
-    const payload: Partial<RoiSettings> = {
-      subscription_cost_claude: draft.subscription_cost_claude ? Number(draft.subscription_cost_claude) : null,
-      subscription_cost_codex: draft.subscription_cost_codex ? Number(draft.subscription_cost_codex) : null,
-      hourly_rate: draft.hourly_rate ? Number(draft.hourly_rate) : null,
-      subscription_start_claude: draft.subscription_start_claude || null,
-      subscription_start_codex: draft.subscription_start_codex || null,
-    };
-    try {
-      setSettings(await saveRoiSettings(payload));
-      setSaveStatus("saved");
-    } catch (err) {
-      console.error("Error al guardar /api/roi-settings:", err);
-      setSaveStatus("error");
-    }
-  };
 
   if (loadError) {
     return (
@@ -117,6 +85,10 @@ export function RoiView({ sources }: RoiViewProps) {
     <div className="space-y-6">
       <div className="rounded-xl border bg-card p-5 space-y-4">
         <h2 className="text-sm font-medium">Parametrización</h2>
+        <p className="text-sm text-muted-foreground">
+          Los montos de tu plan y la tarifa por hora se editan en{" "}
+          <Link to={withSource("/configuracion", search)} className="text-link underline-offset-4 hover:underline">Configuración</Link>.
+        </p>
         <label className="block space-y-1.5">
           <span className="block text-xs text-muted-foreground">Acotar a</span>
           <select
@@ -137,52 +109,6 @@ export function RoiView({ sources }: RoiViewProps) {
             ))}
           </select>
         </label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Field
-            label="Suscripción Claude ($/mes)"
-            value={draft.subscription_cost_claude}
-            onChange={(v) => setDraft((d) => ({ ...d, subscription_cost_claude: v }))}
-          />
-          <Field
-            label="Suscripción Codex ($/mes)"
-            value={draft.subscription_cost_codex}
-            onChange={(v) => setDraft((d) => ({ ...d, subscription_cost_codex: v }))}
-          />
-          <Field
-            label="Tarifa por hora ($)"
-            value={draft.hourly_rate}
-            onChange={(v) => setDraft((d) => ({ ...d, hourly_rate: v }))}
-          />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <DateField
-            label="Inicio suscripción Claude"
-            value={draft.subscription_start_claude}
-            onChange={(v) => setDraft((d) => ({ ...d, subscription_start_claude: v }))}
-          />
-          <DateField
-            label="Inicio suscripción Codex"
-            value={draft.subscription_start_codex}
-            onChange={(v) => setDraft((d) => ({ ...d, subscription_start_codex: v }))}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saveStatus === "saving"}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            <Save className="h-4 w-4" aria-hidden />
-            {saveStatus === "saving" ? "Guardando…" : "Guardar"}
-          </button>
-          <span role="status" aria-live="polite" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-            {saveStatus === "saved" && (<><Check className="h-4 w-4" aria-hidden />Cambios guardados</>)}
-            {saveStatus === "error" && (
-              <><AlertCircle className="h-4 w-4 text-destructive" aria-hidden />No se pudo guardar. Revisa que el servidor siga activo e inténtalo de nuevo.</>
-            )}
-          </span>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -201,36 +127,6 @@ export function RoiView({ sources }: RoiViewProps) {
   );
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <label className="space-y-1.5 block">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <input
-        type="number"
-        min="0"
-        step="0.01"
-        placeholder="—"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
-      />
-    </label>
-  );
-}
-
-function DateField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <label className="space-y-1.5 block">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
-      />
-    </label>
-  );
-}
 
 function SourceRoiCard({
   source,
