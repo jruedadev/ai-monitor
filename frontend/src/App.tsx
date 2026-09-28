@@ -1,5 +1,7 @@
+import { useReducer } from "react";
 import { Navigate } from "react-router-dom";
 import { useUsageStream } from "@/hooks/useUsageStream";
+import { useNewRecommendationsCount } from "@/hooks/useRecommendations";
 import { useDashboardRoute } from "@/hooks/useDashboardRoute";
 import { AppSidebar } from "@/components/Sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -10,11 +12,15 @@ import { ActivityView } from "@/views/ActivityView";
 import { SpendView } from "@/views/SpendView";
 import { ProjectsView } from "@/views/ProjectsView";
 import { SettingsView } from "@/views/SettingsView";
+import { RecommendationsView } from "@/views/RecommendationsView";
 import { groupProjectsByClient } from "@/lib/clients";
 
 export default function App() {
   const route = useDashboardRoute();
-  const { sources, combined, connected } = useUsageStream();
+  const { sources, combined, connected, recommendationsVersion } = useUsageStream();
+  const [localVersion, bumpRecommendations] = useReducer((n: number) => n + 1, 0);
+  const recommendationsKey = `${recommendationsVersion}:${localVersion}`;
+  const newRecommendations = useNewRecommendationsCount(recommendationsKey);
 
   if (route.redirect) return <Navigate to={route.redirect} replace />;
   if (!route.valid) return <Navigate to="/" replace />;
@@ -23,7 +29,7 @@ export default function App() {
 
   return (
     <SidebarProvider className="bg-background text-foreground">
-      <AppSidebar view={route.view} activeClient={route.client} clients={clients} />
+      <AppSidebar view={route.view} activeClient={route.client} clients={clients} newRecommendations={newRecommendations} />
       <SidebarInset className="min-w-0">
         <TopBar
           connected={connected}
@@ -35,7 +41,7 @@ export default function App() {
         {/* SidebarInset ya es el <main>; aquí un div para no anidar landmarks. */}
         <div key={route.view} className="dashboard-section w-full min-w-0 max-w-[1400px] flex-1 p-4 md:p-6">
           {route.view === "home" && (
-            <HomeView source={route.source} compare={route.compare} onCompareChange={route.setCompare} refreshKey={sources} />
+            <HomeView source={route.source} compare={route.compare} onCompareChange={route.setCompare} refreshKey={sources} newRecommendations={newRecommendations} />
           )}
           {route.view === "activity" && (
             <ActivityView
@@ -56,6 +62,9 @@ export default function App() {
               onSelectDate={route.setSelectedDate}
               onSelectProject={route.setSelectedProject}
             />
+          )}
+          {route.view === "recommendations" && (
+            <RecommendationsView source={route.source} refreshKey={recommendationsKey} onChange={bumpRecommendations} />
           )}
           {route.view === "projects" && (
             <ProjectsView

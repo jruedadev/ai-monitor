@@ -6,6 +6,7 @@
  *   /actividad               → tendencia + sesiones del día
  *   /gasto, /gasto/roi       → Gasto y ROI
  *   /proyectos[/<cliente>]   → proyectos agrupados por cliente
+ *   /recomendaciones         → recomendaciones del motor (?estado=aplicada|saltada|resuelta)
  *   /configuracion           → plan y estado de fuentes
  *   ?fuente=<slug>           → filtro global de fuente (ausente = todas, sin OpenRouter)
  *   ?comparar=YYYY-MM        → mes comparado en el Inicio
@@ -14,13 +15,14 @@
  */
 import type { SourceKey } from "@/lib/sources";
 
-export const VIEW_KEYS = ["home", "activity", "spend", "roi", "projects", "settings"] as const;
+export const VIEW_KEYS = ["home", "activity", "spend", "roi", "projects", "recommendations", "settings"] as const;
 export type ViewKey = (typeof VIEW_KEYS)[number];
 
 export const SOURCE_PARAM = "fuente";
 export const COMPARE_PARAM = "comparar";
 export const DAY_PARAM = "dia";
 export const PROJECT_PARAM = "proyecto";
+export const REC_STATUS_PARAM = "estado";
 
 const VIEW_PATH: Record<ViewKey, string> = {
   home: "/",
@@ -28,6 +30,7 @@ const VIEW_PATH: Record<ViewKey, string> = {
   spend: "/gasto",
   roi: "/gasto/roi",
   projects: "/proyectos",
+  recommendations: "/recomendaciones",
   settings: "/configuracion",
 };
 
@@ -68,6 +71,7 @@ export function parsePath(pathname: string): DashboardLocation | null {
   if (head === "gasto" && rest.length === 1 && rest[0] === "roi") return { view: "roi", client: null };
   if (head === "proyectos" && rest.length === 0) return { view: "projects", client: null };
   if (head === "proyectos" && rest.length === 1) return { view: "projects", client: rest[0] };
+  if (head === "recomendaciones" && rest.length === 0) return { view: "recommendations", client: null };
   if (head === "configuracion" && rest.length === 0) return { view: "settings", client: null };
   return null;
 }

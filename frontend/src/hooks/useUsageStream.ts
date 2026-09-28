@@ -4,6 +4,7 @@ import type { UsageSnapshot } from "@/lib/api";
 export function useUsageStream() {
   const [snapshot, setSnapshot] = useState<UsageSnapshot | null>(null);
   const [connected, setConnected] = useState(false);
+  const [recommendationsVersion, setRecommendationsVersion] = useState(0);
   const sourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -16,6 +17,8 @@ export function useUsageStream() {
       setConnected(true);
     });
 
+    es.addEventListener("recommendations", () => setRecommendationsVersion((n) => n + 1));
+
     es.onerror = () => setConnected(false);
 
     return () => es.close();
@@ -25,5 +28,6 @@ export function useUsageStream() {
     sources: snapshot?.sources ?? null,
     combined: snapshot?.combined ?? null,
     connected,
+    recommendationsVersion,
   };
 }

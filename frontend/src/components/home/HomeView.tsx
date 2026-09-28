@@ -17,6 +17,7 @@ interface HomeViewProps {
   compare: string | null;
   onCompareChange: (month: string | null) => void;
   refreshKey: unknown;
+  newRecommendations: number;
 }
 
 /** Mismas alturas que el contenido final para que no salte el layout. */
@@ -35,7 +36,7 @@ function HomeSkeleton() {
   );
 }
 
-export function HomeView({ source, compare, onCompareChange, refreshKey }: HomeViewProps) {
+export function HomeView({ source, compare, onCompareChange, refreshKey, newRecommendations }: HomeViewProps) {
   const briefing = useBriefing(source, compare, refreshKey);
   const { search } = useLocation();
 
@@ -93,7 +94,7 @@ export function HomeView({ source, compare, onCompareChange, refreshKey }: HomeV
       {degraded}
       <BriefingHeader briefing={b} onCompareChange={onCompareChange} />
       <BriefingKpis briefing={b} search={search} />
-      <AttentionList signals={b.attention} search={search} />
+      <AttentionList signals={b.attention} search={search} newRecommendations={newRecommendations} />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <TopProjects projects={b.top_projects} search={search} />
         <DailySpark source={source} from={b.window.from} to={b.window.to} search={search} />

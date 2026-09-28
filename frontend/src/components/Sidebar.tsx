@@ -15,15 +15,17 @@ const NAV: { views: ViewKey[]; to: ViewKey; label: string; icon: typeof Home }[]
   { views: ["activity"], to: "activity", label: "Actividad", icon: Activity },
   { views: ["spend", "roi"], to: "spend", label: "Gasto y ROI", icon: Wallet },
   { views: ["projects"], to: "projects", label: "Proyectos", icon: FolderKanban },
+  { views: ["recommendations"], to: "recommendations", label: "Recomendaciones", icon: Lightbulb },
 ];
 
 interface AppSidebarProps {
   view: ViewKey;
   activeClient: string | null;
   clients: string[];
+  newRecommendations: number;
 }
 
-export function AppSidebar({ view, activeClient, clients }: AppSidebarProps) {
+export function AppSidebar({ view, activeClient, clients, newRecommendations }: AppSidebarProps) {
   const location = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
   const href = (to: string) => withSource(to, location.search);
@@ -59,6 +61,9 @@ export function AppSidebar({ view, activeClient, clients }: AppSidebarProps) {
                         <item.icon aria-hidden />
                         <span>{item.label}</span>
                       </SidebarMenuButton>
+                      {item.to === "recommendations" && newRecommendations > 0 && (
+                        <SidebarMenuBadge aria-label={`${newRecommendations} nuevas`}>{newRecommendations}</SidebarMenuBadge>
+                      )}
                       {item.to === "projects" && clients.length > 0 && (
                         <SidebarMenuSub>
                           {clients.map((client) => (
@@ -82,13 +87,6 @@ export function AppSidebar({ view, activeClient, clients }: AppSidebarProps) {
                     </SidebarMenuItem>
                   );
                 })}
-                <SidebarMenuItem>
-                  <SidebarMenuButton disabled aria-disabled="true">
-                    <Lightbulb aria-hidden />
-                    <span>Recomendaciones</span>
-                  </SidebarMenuButton>
-                  <SidebarMenuBadge>pronto</SidebarMenuBadge>
-                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

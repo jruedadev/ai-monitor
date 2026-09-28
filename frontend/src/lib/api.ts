@@ -184,3 +184,97 @@ export function saveRoiSettings(settings: Partial<RoiSettings>): Promise<RoiSett
     body: JSON.stringify(settings),
   });
 }
+
+export type RecommendationKind = "skill" | "plugin" | "prompt" | "costo";
+export type RecommendationImpact = "alto" | "medio" | "bajo";
+export type RecommendationStatus = "nueva" | "aplicada" | "saltada" | "resuelta";
+export type UserStatus = Exclude<RecommendationStatus, "resuelta">;
+
+export interface PatternEvidence {
+  sessions: number;
+  days: number;
+  tokens: number;
+  projects: string[];
+  sources: string[];
+  snippets: string[];
+}
+
+export interface CostEvidence {
+  rule: string;
+  items: string[];
+  link: string;
+  projects: string[];
+  sources: string[];
+}
+
+export interface Recommendation {
+  id: string;
+  first_seen: string;
+  last_seen: string;
+  tool: string;
+  tokens: number;
+  pattern: string;
+  kind: RecommendationKind;
+  description: string;
+  impact: RecommendationImpact;
+  evidence: PatternEvidence | CostEvidence;
+  draft: string;
+  status: RecommendationStatus;
+  status_at: string | null;
+  generator: string;
+}
+
+export interface RecommendationRun {
+  id: number;
+  started_at: string;
+  finished_at: string | null;
+  trigger: "diario" | "manual";
+  backend: EngineBackend;
+  model: string | null;
+  attempts: number;
+  status: "corriendo" | "ok" | "degraded" | "error";
+  prompts: number | null;
+  clusters: number | null;
+  created: number | null;
+  updated: number | null;
+  resolved: number | null;
+  error: string | null;
+  llm_tokens: number | null;
+  llm_cost: number | null;
+}
+
+export interface RecommendationsResponse {
+  recommendations: Recommendation[];
+  last_run: RecommendationRun | null;
+  running: boolean;
+  degraded: boolean;
+}
+
+export type EngineBackend = "hermes" | "claude" | "none";
+
+export interface EngineSettings {
+  backend: EngineBackend;
+  llm_chain: string[];
+}
+
+const JSON_POST = { method: "POST", headers: { "Content-Type": "application/json" } } as const;
+
+export function fetchRecommendations(status: RecommendationStatus): Promise<RecommendationsResponse> {
+  return getJson(`/api/recommendations?estado=${status}`);
+}
+
+export function setRecommendationStatus(id: string, status: UserStatus): Promise<Recommendation> {
+  return getJson(`/api/recommendations/${encodeURIComponent(id)}/estado`, { ...JSON_POST, body: JSON.stringify({ status }) });
+}
+
+export function runRecommendations(): Promise<{ run_id: number }> {
+  return getJson("/api/recommendations/run", { ...JSON_POST, body: "{}" });
+}
+
+export function fetchEngineSettings(): Promise<EngineSettings> {
+  return getJson("/api/engine-settings");
+}
+
+export function saveEngineSettings(settings: EngineSettings): Promise<EngineSettings> {
+  return getJson("/api/engine-settings", { ...JSON_POST, body: JSON.stringify(settings) });
+}

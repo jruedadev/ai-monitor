@@ -25,6 +25,7 @@ const VIEWS: { view: ViewKey; label: string; keywords: string[] }[] = [
   { view: "spend", label: "Gasto", keywords: ["costo", "kpi"] },
   { view: "roi", label: "ROI", keywords: ["suscripción", "ahorro"] },
   { view: "projects", label: "Proyectos", keywords: ["clientes"] },
+  { view: "recommendations", label: "Recomendaciones", keywords: ["motor", "skills", "plugins", "prompts", "sugerencias"] },
   { view: "settings", label: "Configuración", keywords: ["plan", "tarifa", "fuentes"] },
 ];
 

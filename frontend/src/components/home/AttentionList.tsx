@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, Info } from "lucide-react";
 import type { BriefingSignal } from "@/lib/api";
 import { withSource } from "@/lib/routes";
+import { recommendationsLine } from "@/lib/recommendations";
 
 // El color nunca es el único indicador: punto + ícono + texto accesible.
 const SEVERITY = {
@@ -9,7 +10,7 @@ const SEVERITY = {
   info: { icon: Info, label: "Información", dot: "bg-link", text: "text-link" },
 } as const;
 
-export function AttentionList({ signals, search }: { signals: BriefingSignal[]; search: string }) {
+export function AttentionList({ signals, search, newRecommendations = 0 }: { signals: BriefingSignal[]; search: string; newRecommendations?: number }) {
   return (
     <section aria-labelledby="attention-title" className="rounded-xl border bg-card p-5">
       <h2 id="attention-title" className="text-sm font-medium">Atención ahora</h2>
@@ -43,8 +44,16 @@ export function AttentionList({ signals, search }: { signals: BriefingSignal[]; 
               </li>
             );
           })}
-        </ul>
-      )}
-    </section>
+</ul>
+          )}
+          {newRecommendations > 0 && (
+            <Link
+              to={withSource("/recomendaciones", search)}
+              className="mt-3 inline-block border-t pt-3 text-sm text-link underline-offset-4 hover:underline"
+            >
+              {recommendationsLine(newRecommendations)}
+            </Link>
+          )}
+        </section>
   );
 }

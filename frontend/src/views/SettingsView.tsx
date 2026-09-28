@@ -1,4 +1,5 @@
 import { SettingsForm } from "@/components/SettingsForm";
+import { EngineSettingsForm } from "@/components/EngineSettingsForm";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { UsageSnapshot } from "@/lib/api";
 import { sourceStatuses } from "@/lib/settings";
@@ -12,6 +13,7 @@ export function SettingsView({ sources }: { sources: UsageSnapshot["sources"] | 
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Configuración</h1>
       <SettingsForm />
+      <EngineSettingsForm />
       <section aria-labelledby="sources-title" className="rounded-xl border bg-card p-5">
         <h2 id="sources-title" className="text-sm font-medium">Fuentes</h2>
         {statuses.length === 0 ? (

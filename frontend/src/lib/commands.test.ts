@@ -21,8 +21,8 @@ describe("buildCommandEntries", () => {
   const entries = buildCommandEntries(sources, combined);
   const byGroup = (g: string) => entries.filter((e) => e.group === g);
 
-  it("incluye las seis vistas", () => {
-    expect(byGroup("Vistas").map((e) => e.to)).toEqual(["/", "/actividad", "/gasto", "/gasto/roi", "/proyectos", "/configuracion"]);
+  it("incluye las siete vistas", () => {
+    expect(byGroup("Vistas").map((e) => e.to)).toEqual(["/", "/actividad", "/gasto", "/gasto/roi", "/proyectos", "/recomendaciones", "/configuracion"]);
   });
   it("clientes y proyectos enlazan a /proyectos, sin heredar el filtro de fuente", () => {
     expect(byGroup("Clientes")[0]).toMatchObject({ label: "ACME", to: "/proyectos/ACME" });
