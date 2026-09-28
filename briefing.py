@@ -364,6 +364,16 @@ def evaluate_rules(ctx):
 
 # --- Ensamblado ----------------------------------------------------------------
 
+def build_context(project_rows, model_rows, settings, today, source="all"):
+    """Contexto que consumen las RULES: lo usan el briefing y el motor de
+    recomendaciones (recommend/cost.py), que lo evalúa por fuente."""
+    rows = rows_for_source(source, project_rows, model_rows)
+    window = month_window(month_of(today), today.day)
+    return {"source": source, "today": today, "window": window, "rows": rows,
+            "window_rows": in_range(rows, *window), "project_rows": project_rows,
+            "model_rows": model_rows, "settings": settings}
+
+
 def build_briefing(project_rows, model_rows, settings, today, source="all", compare=None, degraded=False):
     if source not in VALID_SOURCES:
         raise BriefingError(f"Fuente desconocida: {source}")
@@ -371,7 +381,8 @@ def build_briefing(project_rows, model_rows, settings, today, source="all", comp
         raise BriefingError("El parámetro compare debe tener el formato YYYY-MM")
 
     current = month_of(today)
-    rows = rows_for_source(source, project_rows, model_rows)
+    ctx = build_context(project_rows, model_rows, settings, today, source)
+    rows = ctx["rows"]
     start = min((r["date"] for r in rows), default=None)
     eligible = eligible_months(start, current)
     by_month = {entry["month"]: entry for entry in eligible}
@@ -384,16 +395,12 @@ def build_briefing(project_rows, model_rows, settings, today, source="all", comp
         raise BriefingError(f"No hay datos para comparar con {compare}")
     entry = by_month.get(compare_month)
 
-    window = month_window(current, today.day)
+    window, window_rows = ctx["window"], ctx["window_rows"]
     compare_window = month_window(compare_month, today.day)
-    window_rows = in_range(rows, *window)
     compare_rows = in_range(rows, *compare_window) if entry else []
 
     cost_now, cost_prev = sum_cost(window_rows), (sum_cost(compare_rows) if entry else None)
     tokens_now, tokens_prev = sum_tokens(window_rows), (sum_tokens(compare_rows) if entry else None)
-
-    ctx = {"source": source, "today": today, "window": window, "rows": rows, "window_rows": window_rows,
-           "project_rows": project_rows, "model_rows": model_rows, "settings": settings}
 
     return {
         "source": source,

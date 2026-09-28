@@ -417,5 +417,19 @@ class TestSqlite(unittest.TestCase):
         self.assertIn("Atención ahora", text)
 
 
+class TestBuildContext(unittest.TestCase):
+    def test_build_context_filters_source_and_window(self):
+        from datetime import date
+        rows = [{"date": "2026-09-01", "source": "codex", "project": "/p", "tokens": 5, "cost": 1.0},
+                {"date": "2026-08-01", "source": "codex", "project": "/p", "tokens": 7, "cost": 1.0},
+                {"date": "2026-09-01", "source": "claude_code", "project": "/p", "tokens": 9, "cost": 1.0}]
+        ctx = briefing.build_context(rows, [], {}, date(2026, 9, 20), source="codex")
+        self.assertEqual(ctx["window"], ("2026-09-01", "2026-09-20"))
+        self.assertEqual([r["tokens"] for r in ctx["rows"]], [5, 7])
+        self.assertEqual([r["tokens"] for r in ctx["window_rows"]], [5])
+        self.assertEqual(set(ctx), {"source", "today", "window", "rows", "window_rows",
+                                    "project_rows", "model_rows", "settings"})
+
+
 if __name__ == "__main__":
     unittest.main()
