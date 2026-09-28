@@ -9,7 +9,7 @@ import math
 import os
 import re
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -31,6 +31,7 @@ SOURCE_SLUGS = {"claude_code": "claude-code", "codex": "codex", "opencode": "ope
 
 _MONTHS_SHORT = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic")
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 class BriefingError(ValueError):
@@ -150,16 +151,44 @@ def _subscription_candidates(source):
     return [source] if source in SUBSCRIPTION_KEYS else []
 
 
+def _parse_cost_setting(value):
+    """float(value) o None si el dato guardado está corrupto — nunca debe romper el briefing."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_start_setting(value):
+    """Fecha YYYY-MM-DD válida, o None (dato ausente o corrupto, p.ej. un número guardado
+    por error)."""
+    if value is None:
+        return None
+    text = str(value)[:10]
+    return text if _DATE_RE.match(text) else None
+
+
 def subscription_summary(source, project_rows, settings, window):
-    configured = [s for s in _subscription_candidates(source)
-                  if settings.get(SUBSCRIPTION_KEYS[s][0]) is not None]
+    configured = []
+    for s in _subscription_candidates(source):
+        cost_key, start_key = SUBSCRIPTION_KEYS[s]
+        cost = _parse_cost_setting(settings.get(cost_key))
+        if cost is None:
+            continue
+        start = _parse_start_setting(settings.get(start_key))
+        if start is not None and start > window[1]:
+            # La suscripción todavía no empieza dentro de esta ventana: se trata como
+            # no configurada para este mes, no como "paid $X, api $0".
+            continue
+        configured.append((s, cost, start))
     if not configured:
         return {"configured": False, "paid": None, "api_equivalent": None, "winner": None, "savings": None}
-    paid = sum(float(settings[SUBSCRIPTION_KEYS[s][0]]) for s in configured)
+    paid = sum(cost for _, cost, _ in configured)
     api = 0.0
-    for s in configured:
-        start = settings.get(SUBSCRIPTION_KEYS[s][1])
-        lower = max(window[0], str(start)[:10]) if start else window[0]
+    for s, _, start in configured:
+        lower = max(window[0], start) if start else window[0]
         api += sum_cost(in_range([r for r in project_rows if r["source"] == s], lower, window[1]))
     winner, savings = compare_costs(api, paid)
     return {"configured": True, "paid": round(paid, 2), "api_equivalent": round(api, 2),
@@ -430,7 +459,7 @@ def load(db_path):
 
 def get_briefing(db_path=None, source="all", compare=None, today=None):
     db_path = db_path or history.DB_PATH_DEFAULT
-    today = today or date.today()
+    today = today or datetime.now(timezone.utc).date()
     if source not in VALID_SOURCES:
         raise BriefingError(f"Fuente desconocida: {source}")
     try:

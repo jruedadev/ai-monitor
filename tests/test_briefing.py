@@ -3,6 +3,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+import unittest.mock
 from datetime import date
 
 import briefing
@@ -174,12 +175,25 @@ class TestSubscription(unittest.TestCase):
         data = build(rows, cfg=settings(subscription_cost_claude=20.0, subscription_start_claude="2026-09-15"))
         self.assertEqual(data["subscription"]["api_equivalent"], 30.0)
 
-    def test_future_start_counts_nothing_and_never_negative(self):
+    def test_future_start_excludes_subscription_from_this_window(self):
+        # subscription_start_claude está después del fin de la ventana (2026-09-27):
+        # la suscripción no ha empezado este mes, así que se trata como no configurada.
         data = build([row("2026-09-10", cost=100)],
                      cfg=settings(subscription_cost_claude=20.0, subscription_start_claude="2026-10-05"))
-        self.assertEqual(data["subscription"]["api_equivalent"], 0.0)
-        self.assertEqual(data["subscription"]["winner"], "api")
-        self.assertEqual(data["subscription"]["savings"], 20.0)
+        self.assertEqual(data["subscription"], {"configured": False, "paid": None, "api_equivalent": None,
+                                                "winner": None, "savings": None})
+
+    def test_bad_stored_cost_is_treated_as_not_configured(self):
+        data = build([row("2026-09-10", cost=100)], cfg=settings(subscription_cost_claude="not-a-number"))
+        self.assertFalse(data["subscription"]["configured"])
+
+    def test_bad_stored_start_date_falls_back_to_window_start(self):
+        # Un valor numérico guardado por error en subscription_start_* (p.ej. 20260905.0)
+        # no debe romper el cálculo: se ignora como fecha de inicio.
+        rows = [row("2026-09-10", cost=100)]
+        data = build(rows, cfg=settings(subscription_cost_claude=20.0, subscription_start_claude=20260905.0))
+        self.assertTrue(data["subscription"]["configured"])
+        self.assertEqual(data["subscription"]["api_equivalent"], 100.0)
 
     def test_source_without_possible_subscription(self):
         data = build([row("2026-09-03", source="opencode")], source="opencode",
@@ -376,6 +390,23 @@ class TestSqlite(unittest.TestCase):
     def test_invalid_source_raises_even_without_db(self):
         with self.assertRaises(briefing.BriefingError):
             briefing.get_briefing(db_path=self.db, source="nope", today=TODAY)
+
+    def test_default_today_uses_utc_date_not_local(self):
+        # Toda la persistencia (by_day, history.db) usa fechas UTC; si el default de
+        # "today" usara la hora local, cerca de medianoche el briefing quedaría un día
+        # desfasado frente a los datos guardados.
+        import datetime as dt_module
+
+        class FakeDateTime(dt_module.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                if tz is dt_module.timezone.utc:
+                    return dt_module.datetime(2026, 9, 28, 0, 30, tzinfo=dt_module.timezone.utc)
+                return dt_module.datetime(2026, 9, 27, 19, 30)
+
+        with unittest.mock.patch("briefing.datetime", FakeDateTime):
+            data = briefing.get_briefing(db_path=self.db)
+        self.assertEqual(data["window"]["to"], "2026-09-28")
 
     def test_format_briefing_for_cli(self):
         self._insert([("2026-08-27", "claude_code", APP, 1000, 10.0), ("2026-09-27", "claude_code", APP, 500, 5.0)])
