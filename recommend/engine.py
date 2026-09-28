@@ -1,17 +1,18 @@
 """Orquesta una corrida del motor (spec §3 y §5): lock → prompts (30 días) →
 redacción → candidatos → LLM o solo léxico → heurística → señales de costo
 → store.apply_run en una transacción → registro de la corrida → liberar lock."""
+import json
 import os
 import sqlite3
 import time
 from datetime import date, datetime, timedelta, timezone
 
-import briefing
 import history
 from recommend import cluster as clustering
 from recommend import cost, heuristics, llm, store
 from recommend.prompts import ENGINE_DIR, read_all
 from recommend.redact import redact
+import briefing
 
 LOCK_PATH = os.path.expanduser("~/.local/share/ai-monitor/recommend.lock")
 WINDOW_DAYS = 30
@@ -118,14 +119,31 @@ def _source_totals(project_rows, since, until):
     return totals
 
 
-def _pattern_rec(c, texts, model, totals):
-    generator = model if texts else "reglas"
+def _pattern_rec(c, texts, generator_override, model, totals):
+    generator = generator_override or (model if texts else "reglas")
     texts = texts or heuristics.recommend(c)
     total = sum(totals.get(source, 0) for source in c.sources)
     return {"tool": c.tool, "tokens": c.tokens, "pattern": texts["pattern"], "kind": texts["kind"],
             "description": texts["description"], "impact": impact_for(c.tokens, total),
             "evidence": c.evidence(), "draft": texts["draft"], "signature": sorted(c.signature),
             "generator": generator}
+
+
+def _known_signatures(db_path):
+    out = {}
+    con = store.connect(db_path)
+    try:
+        rows = con.execute("SELECT signature, kind, pattern, description, draft, generator FROM recommendations").fetchall()
+    finally:
+        con.close()
+    for row in rows:
+        sig, gen = row["signature"], row["generator"]
+        if sig and gen and gen != "reglas":
+            try:
+                out[tuple(sorted(json.loads(sig)))] = dict(row)
+            except (json.JSONDecodeError, TypeError):
+                continue
+    return out
 
 
 def _analyze(settings, db_path, today, prompt_overrides, session_tokens, runner, engine_dir):
@@ -142,28 +160,46 @@ def _analyze(settings, db_path, today, prompt_overrides, session_tokens, runner,
         errors.append(f"history: {exc}")
 
     fields = {"model": None, "attempts": 0, "llm_tokens": 0, "llm_cost": 0.0}
-    texts, degraded = {}, False
+    texts, generators, degraded = {}, {}, False
     if settings["backend"] == "none":
         groups, degraded = clustering.lexical_clusters(prompts, session_tokens), True
     else:
         cands = clustering.candidates(prompts, session_tokens)
         groups = []
         if cands:
-            result = llm.run_llm(cands, settings["backend"], settings["llm_chain"], runner=runner, cwd=engine_dir)
-            fields.update(attempts=result["attempts"], llm_tokens=result["llm_tokens"], llm_cost=result["llm_cost"])
-            errors.extend(result["errors"])
-            if result["ok"]:
-                fields["model"] = result["model"]
-                by_id = {c.cluster_id: c for c in cands}
-                grouped = llm.validate_groups(result["data"], list(by_id))
-                merged = [clustering.merge([by_id[m] for m in members], gid) for gid, members in grouped.items()]
-                groups = clustering.rank_final(merged)
-                texts = llm.validate_recommendations(result["data"], set(grouped))
+            known = _known_signatures(db_path)
+            reused = [c for c in cands if tuple(sorted(c.signature)) in known]
+            new_cands = [c for c in cands if c not in reused]
+            result = None
+            if new_cands:
+                result = llm.run_llm(new_cands, settings["backend"], settings["llm_chain"],
+                                     runner=runner, cwd=engine_dir)
+                fields.update(attempts=result["attempts"], llm_tokens=result["llm_tokens"],
+                              llm_cost=result["llm_cost"])
+                errors.extend(result["errors"])
+            reused_groups = [clustering.merge([c], c.cluster_id) for c in reused]
+            for c in reused:
+                rec = known[tuple(sorted(c.signature))]
+                texts[c.cluster_id] = {"kind": rec["kind"], "pattern": rec["pattern"],
+                                       "description": rec["description"], "draft": rec["draft"]}
+                generators[c.cluster_id] = rec["generator"]
+            if result is None or result["ok"]:
+                if result is not None:
+                    fields["model"] = result["model"]
+                    by_id = {c.cluster_id: c for c in new_cands}
+                    grouped = llm.validate_groups(result["data"], list(by_id))
+                    merged = [clustering.merge([by_id[m] for m in members], gid)
+                             for gid, members in grouped.items()]
+                    texts.update(llm.validate_recommendations(result["data"], set(grouped)))
+                else:
+                    merged = []
+                groups = clustering.rank_final(merged + reused_groups)
             else:
                 groups, degraded = clustering.lexical_clusters(prompts, session_tokens), True
 
     totals = _source_totals(project_rows, since, today.isoformat())
-    pattern_recs = [_pattern_rec(c, texts.get(c.cluster_id), fields["model"], totals) for c in groups]
+    pattern_recs = [_pattern_rec(c, texts.get(c.cluster_id), generators.get(c.cluster_id),
+                                  fields["model"], totals) for c in groups]
     cost_recs = cost.cost_recommendations(project_rows, model_rows, roi, today)
     counts = store.apply_run(db_path, pattern_recs, cost_recs, now_iso())
     return {"status": "degraded" if degraded else "ok", **fields, "prompts": len(prompts),

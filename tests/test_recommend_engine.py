@@ -176,6 +176,54 @@ class TestRun(EngineTestCase):
             engine.release_lock(self.lock)
         self.assertIsNone(store.last_run(self.db))
 
+    def solo_triple_fixture(self):
+        write_session(self.cc_root, "s1", TEXT_A, "2026-09-20")
+        write_session(self.cc_root, "s2", TEXT_A, "2026-09-21")
+        write_session(self.cc_root, "s3", TEXT_A, "2026-09-22")
+        return {("claude_code", "s1"): 5000, ("claude_code", "s2"): 5000,
+                ("claude_code", "s3"): 5000}
+
+    def test_reuses_known_signature_without_calling_llm(self):
+        SOLO_GROUPED = {"groups": [],
+                        "recommendations": [{"group_id": "c1", "kind": "skill",
+                                             "pattern": "Diagnosticar cobros",
+                                             "description": "Se repite.",
+                                             "draft": "---\nname: x\n---"}]}
+        tokens = self.solo_triple_fixture()
+        self.run_engine(hermes_runner(SOLO_GROUPED), tokens)
+
+        def never(*_):
+            raise AssertionError("no debe llamarse al LLM: el signature ya está recomendado")
+        run_id, status = self.run_engine(never, tokens)
+        self.assertEqual(status, "ok")
+        self.assertEqual(store.get_run(self.db, run_id)["attempts"], 0)
+        [rec] = store.list_recommendations(self.db)
+        self.assertEqual(rec["generator"], "nous:stealth/space-bunny-alpha")
+
+    def test_mixed_known_and_new_signatures_only_sends_new_to_llm(self):
+        SOLO_GROUPED = {"groups": [],
+                        "recommendations": [{"group_id": "c1", "kind": "skill",
+                                             "pattern": "Diagnosticar cobros",
+                                             "description": "Se repite.",
+                                             "draft": "---\nname: x\n---"}]}
+        tokens = self.solo_triple_fixture()
+        self.run_engine(hermes_runner(SOLO_GROUPED), tokens)
+        new_text = "despliega el servicio de facturación en producción ya"
+        write_session(self.cc_root, "c1", new_text, "2026-09-23")
+        write_session(self.cc_root, "c2", new_text, "2026-09-23")
+        write_session(self.cc_root, "c3", new_text, "2026-09-24")
+        tokens.update({("claude_code", "c1"): 2000, ("claude_code", "c2"): 2000,
+                        ("claude_code", "c3"): 2000})
+        NEW_GROUPED = {"groups": [{"group_id": "g1", "members": ["c2"]}],
+                       "recommendations": [{"group_id": "g1", "kind": "prompt",
+                                            "pattern": "Desplegar facturación",
+                                            "description": "Se repite.",
+                                            "draft": "Añade esto a AGENTS.md"}]}
+        run_id, status = self.run_engine(hermes_runner(NEW_GROUPED), tokens)
+        self.assertEqual(status, "ok")
+        self.assertEqual(store.get_run(self.db, run_id)["attempts"], 1)
+        self.assertEqual(len(store.list_recommendations(self.db)), 2)
+
 
 class TestSessionTokens(unittest.TestCase):
     def test_load_session_tokens_from_collectors(self):
