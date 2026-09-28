@@ -1,0 +1,10 @@
+[Unit]
+Description=ai-monitor: motor de recomendaciones cada día a las 07:00
+
+[Timer]
+OnCalendar=*-*-* 07:00
+Persistent=true
+Unit=ai-monitor-recommend.service
+
+[Install]
+WantedBy=timers.target

@@ -8,6 +8,7 @@ PYTHON_BIN="$(command -v python3)"
 UNITS_DIR="$HOME/.config/systemd/user"
 ENV_DIR="$HOME/.config/ai-monitor"
 ENV_FILE="$ENV_DIR/env"
+UNIT_PATH="$PATH"
 
 mkdir -p "$UNITS_DIR" "$ENV_DIR"
 
@@ -15,6 +16,7 @@ sed \
   -e "s#__REPO_DIR__#${REPO_DIR}#g" \
   -e "s#__PYTHON__#${PYTHON_BIN}#g" \
   -e "s#__ENV_FILE__#${ENV_FILE}#g" \
+  -e "s#__PATH__#${UNIT_PATH}#g" \
   "$REPO_DIR/systemd/ai-monitor.service.template" > "$UNITS_DIR/ai-monitor.service"
 
 cp "$REPO_DIR/systemd/ai-monitor.timer" "$UNITS_DIR/ai-monitor.timer"
@@ -58,6 +60,7 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
     -e "s#__REPO_DIR__#${REPO_DIR}#g" \
     -e "s#__PYTHON__#${PYTHON_BIN}#g" \
     -e "s#__ENV_FILE__#${ENV_FILE}#g" \
+    -e "s#__PATH__#${UNIT_PATH}#g" \
     "$REPO_DIR/systemd/ai-monitor-server.service.template" > "$UNITS_DIR/ai-monitor-server.service"
 
   echo "Unidad ai-monitor-server.service instalada en $UNITS_DIR"
@@ -66,8 +69,18 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
   echo "  systemctl --user enable --now ai-monitor-server.service"
 fi
 
+sed \
+  -e "s#__REPO_DIR__#${REPO_DIR}#g" \
+  -e "s#__PYTHON__#${PYTHON_BIN}#g" \
+  -e "s#__ENV_FILE__#${ENV_FILE}#g" \
+  -e "s#__PATH__#${UNIT_PATH}#g" \
+  "$REPO_DIR/systemd/ai-monitor-recommend.service.template" > "$UNITS_DIR/ai-monitor-recommend.service"
+
+cp "$REPO_DIR/systemd/ai-monitor-recommend.timer" "$UNITS_DIR/ai-monitor-recommend.timer"
+
 echo "Unidades instaladas en $UNITS_DIR"
 echo ""
 echo "Para activarlas, corre:"
 echo "  systemctl --user daemon-reload"
 echo "  systemctl --user enable --now ai-monitor.timer"
+echo "  systemctl --user enable --now ai-monitor-recommend.timer   # motor de recomendaciones, 07:00"

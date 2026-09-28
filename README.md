@@ -58,6 +58,7 @@ source ~/.bashrc
 # 4. Activa el timer
 systemctl --user daemon-reload
 systemctl --user enable --now ai-monitor.timer
+systemctl --user enable --now ai-monitor-recommend.timer
 ```
 
 Resultado: la terminal interactiva lee la key de `~/.bashrc`; el timer de systemd (no-interactivo) la lee de `~/.config/ai-monitor/env` vía `EnvironmentFile`. Si más adelante regeneras la key, repite los pasos 2 y 3.
@@ -120,6 +121,16 @@ El filtro de fuente es global (`?fuente=claude-code|codex|opencode|hermes|openro
 ### Histórico más allá de la retención de cada proveedor
 
 `server.py` (y también `main.py`, en cada ejecución) guarda un rollup diario por proyecto/modelo en `~/.local/share/ai-monitor/history.db` (SQLite). Si Claude Code, Codex, OpenCode o Hermes eventualmente rotan o truncan sesiones viejas, ese histórico local no se pierde — el gráfico de tendencia del dashboard interactivo (`GET /api/history`) lee de ahí, no de los datos en vivo.
+
+## Motor de recomendaciones
+
+Cada día a las 07:00 (`ai-monitor-recommend.timer`) o con **Analizar ahora** en la vista Recomendaciones, ai-monitor lee tus prompts de los últimos 30 días (Claude Code, Codex, OpenCode y Hermes; OpenRouter no tiene prompts locales), los redacta (claves, correos, rutas e IPs), agrupa los que se repiten y propone una **skill**, un **plugin/MCP** o un **prompt reutilizable** para cada patrón, más recomendaciones de **costo** a partir de las señales del Inicio.
+
+- Backend por defecto: Hermes con modelos free (`nous:…:free` o `stealth/…`), en cadena con fallback. Alternativas: `claude -p` (consume tu suscripción y aparece como proyecto `motor-recomendaciones` en el dashboard) o `ninguno` (solo reglas locales). Se configura en Configuración → Motor de recomendaciones.
+- Si ningún modelo responde, la corrida queda **degradada**: agrupación léxica y textos por plantilla.
+- Al LLM solo le llegan resúmenes por patrón con ≤3 fragmentos redactados de ≤200 caracteres; `history.db` guarda solo esos fragmentos.
+- A mano: `python3 -m recommend run --trigger manual` (código 0 ok/degradada, 1 error, 2 ya hay una corrida en curso).
+- API: `GET /api/recommendations?estado=nueva|aplicada|saltada|resuelta|todas`, `POST /api/recommendations/<id>/estado`, `POST /api/recommendations/run` (202/409), `GET|POST /api/engine-settings`. Evento SSE `recommendations` al terminar cada corrida.
 
 ## Sobre el costo estimado
 
