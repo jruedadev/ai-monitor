@@ -26,22 +26,18 @@ export function windowLabel(b: BriefingResponse): string {
   return `${current} · comparado con ${dayRange(b.compare.from, b.compare.to)}`;
 }
 
-// Intl usa espacios no separables entre el símbolo y el número; se normalizan a
-// un espacio normal, igual que el resto del formato (ver lib/format.ts).
-const normalizeSpaces = (text: string) => text.replace(/\s/g, " ");
-
 export function subscriptionLine(s: BriefingSubscription): string | null {
   if (!s.configured || s.paid === null || s.api_equivalent === null || s.savings === null) return null;
   const base = `Pagas ${formatUsd(s.paid)} · equivale a ${formatUsd(s.api_equivalent)}`;
-  if (s.winner === "subscription") return normalizeSpaces(`${base} · ahorras ${formatUsd(s.savings)}`);
-  if (s.winner === "api") return normalizeSpaces(`${base} · la API saldría ${formatUsd(s.savings)} más barata`);
-  return normalizeSpaces(`${base} · empate`);
+  if (s.winner === "subscription") return `${base} · ahorras ${formatUsd(s.savings)}`;
+  if (s.winner === "api") return `${base} · la API saldría ${formatUsd(s.savings)} más barata`;
+  return `${base} · empate`;
 }
 
 export function subscriptionHeadline(s: BriefingSubscription): string {
   if (!s.configured || s.savings === null) return "Sin plan configurado";
-  if (s.winner === "subscription") return normalizeSpaces(`Ahorras ${formatUsd(s.savings)}`);
-  if (s.winner === "api") return normalizeSpaces(`API más barata por ${formatUsd(s.savings)}`);
+  if (s.winner === "subscription") return `Ahorras ${formatUsd(s.savings)}`;
+  if (s.winner === "api") return `API más barata por ${formatUsd(s.savings)}`;
   return "Empate";
 }
 

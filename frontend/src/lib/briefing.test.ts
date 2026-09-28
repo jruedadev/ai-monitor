@@ -4,6 +4,9 @@ import {
   coverageLabel, dailyCostSeries, formatDeltaPct, isEmptyBriefing, subscriptionHeadline, subscriptionLine, windowLabel,
 } from "@/lib/briefing";
 
+// Intl usa espacios no separables; se normalizan para comparar.
+const norm = (text: string) => text.replace(/\s/g, " ");
+
 function briefing(overrides: Partial<BriefingResponse> = {}): BriefingResponse {
   return {
     source: "all",
@@ -50,19 +53,19 @@ describe("suscripción", () => {
   const base = { configured: true, paid: 20, api_equivalent: 657.1 } as const;
   it("gana la suscripción", () => {
     const s = { ...base, winner: "subscription", savings: 637.1 } as const;
-    expect(subscriptionLine(s)).toBe("Pagas $ 20,00 · equivale a $ 657,10 · ahorras $ 637,10");
-    expect(subscriptionHeadline(s)).toBe("Ahorras $ 637,10");
+    expect(norm(subscriptionLine(s) ?? "")).toBe("Pagas $ 20,00 · equivale a $ 657,10 · ahorras $ 637,10");
+    expect(norm(subscriptionHeadline(s))).toBe("Ahorras $ 637,10");
   });
   it("gana la API", () => {
     const s = { ...base, api_equivalent: 5, winner: "api", savings: 15 } as const;
-    expect(subscriptionLine(s)).toBe("Pagas $ 20,00 · equivale a $ 5,00 · la API saldría $ 15,00 más barata");
-    expect(subscriptionHeadline(s)).toBe("API más barata por $ 15,00");
+    expect(norm(subscriptionLine(s) ?? "")).toBe("Pagas $ 20,00 · equivale a $ 5,00 · la API saldría $ 15,00 más barata");
+    expect(norm(subscriptionHeadline(s))).toBe("API más barata por $ 15,00");
   });
   it("empate y sin plan", () => {
-    expect(subscriptionHeadline({ ...base, winner: "tie", savings: 0 })).toBe("Empate");
+    expect(norm(subscriptionHeadline({ ...base, winner: "tie", savings: 0 }))).toBe("Empate");
     const none = { configured: false, paid: null, api_equivalent: null, winner: null, savings: null };
     expect(subscriptionLine(none)).toBeNull();
-    expect(subscriptionHeadline(none)).toBe("Sin plan configurado");
+    expect(norm(subscriptionHeadline(none))).toBe("Sin plan configurado");
   });
 });
 
