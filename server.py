@@ -10,6 +10,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
+import briefing
 import history
 import main
 from sse import SSEBroker, format_sse_event
@@ -66,6 +67,18 @@ def make_handler(static_dir, broker, db_path=None):
                 except ValueError:
                     days = 90
                 self._send_json(json.dumps(history.query_history(days=days, db_path=db_path)))
+            elif parsed.path == "/api/briefing":
+                qs = parse_qs(parsed.query)
+                try:
+                    data = briefing.get_briefing(
+                        db_path=db_path,
+                        source=qs.get("source", ["all"])[0],
+                        compare=qs.get("compare", [None])[0],
+                    )
+                except briefing.BriefingError as exc:
+                    self._send_json(json.dumps({"error": str(exc)}), status=400)
+                    return
+                self._send_json(json.dumps(data))
             elif parsed.path == "/api/roi-settings":
                 self._send_json(json.dumps(history.get_roi_settings(db_path=db_path)))
             elif parsed.path == "/api/stream":
@@ -95,9 +108,9 @@ def make_handler(static_dir, broker, db_path=None):
                 self.send_response(404)
                 self.end_headers()
 
-        def _send_json(self, body):
+        def _send_json(self, body, status=200):
             encoded = body.encode("utf-8")
-            self.send_response(200)
+            self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(encoded)))
             self.end_headers()

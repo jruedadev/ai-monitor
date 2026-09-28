@@ -114,6 +114,32 @@ class TestServerAPI(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b"fallback", body)
 
+    def test_api_briefing_returns_empty_briefing_without_history(self):
+        status, body = self._get("/api/briefing")
+        self.assertEqual(status, 200)
+        data = json.loads(body)
+        self.assertEqual(data["source"], "all")
+        self.assertEqual(data["attention"], [])
+        self.assertEqual(data["eligible_months"], [])
+        self.assertIn("kpis", data)
+        self.assertFalse(data["degraded"])
+
+    def test_api_briefing_openrouter_source(self):
+        status, body = self._get("/api/briefing?source=openrouter")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["source"], "openrouter")
+
+    def test_api_briefing_invalid_compare_is_400_with_message(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._get("/api/briefing?compare=1999-01")
+        self.assertEqual(ctx.exception.code, 400)
+        self.assertIn("1999-01", json.loads(ctx.exception.read())["error"])
+
+    def test_api_briefing_invalid_source_is_400(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._get("/api/briefing?source=copilot")
+        self.assertEqual(ctx.exception.code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

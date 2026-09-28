@@ -22,6 +22,10 @@ python3 main.py --json              # todas las fuentes crudas + vista combinada
 python3 main.py --html out.html     # dashboard HTML con pestañas por fuente
 ```
 
+### Briefing
+
+`python3 main.py --briefing` imprime el resumen del mes: gasto equivalente API, tokens y días activos comparados con el mismo tramo del mes anterior, suscripción frente a API y las señales de "Atención ahora". Es lo mismo que muestra el Inicio del dashboard (`GET /api/briefing?source=<fuente>&compare=YYYY-MM`).
+
 ## OpenRouter
 
 Genera una **management key** en https://openrouter.ai/keys y expórtala:
