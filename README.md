@@ -103,6 +103,18 @@ python3 server.py
 
 El puerto es configurable con `AI_MONITOR_PORT` (default `8420`). El servidor recolecta datos de las 4 fuentes cada 60 segundos y los empuja al navegador vía SSE — no hace falta recargar la página.
 
+### Estructura del dashboard
+
+| Ruta | Qué responde |
+|---|---|
+| `/` Inicio | ¿Cómo voy este mes y qué debo mirar? KPIs contra el mismo tramo de un mes comparable (selector "Comparar con") y señales de "Atención ahora" |
+| `/actividad` | ¿Qué pasó? Tendencia diaria y sesiones del día (`?dia=`) |
+| `/gasto`, `/gasto/roi` | ¿Cuánto me cuesta? Gasto por proyecto (o por modelo en OpenRouter) y suscripción frente a API |
+| `/proyectos` | ¿En qué proyectos? Agrupados por cliente (`~/DEV/<CLIENTE>/<proyecto>`) |
+| `/configuracion` | Tu plan (costo mensual y fecha de inicio de la suscripción, tarifa por hora) y el estado de cada fuente |
+
+El filtro de fuente es global (`?fuente=claude-code|codex|opencode|hermes|openrouter`) y se conserva al navegar; ⌘K / Ctrl+K busca vistas, clientes, proyectos y sesiones. Las rutas antiguas (`/claude-code`, `/roi`, `/cliente/<X>`…) redirigen a las nuevas.
+
 **Como servicio de systemd**: `./install.sh` pregunta si quieres instalar también `ai-monitor-server.service` (servicio de larga duración, separado del `ai-monitor.timer` existente que solo regenera el HTML estático). Si aceptas y falta `frontend/dist`, el script lo compila automáticamente (con `npm install --legacy-peer-deps && npm run build`) siempre que haya `npm` disponible; si no hay `npm` o la compilación falla, solo muestra una advertencia con el comando manual.
 
 ### Histórico más allá de la retención de cada proveedor
