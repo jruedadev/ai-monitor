@@ -42,6 +42,14 @@ class TestCost(unittest.TestCase):
             self.assertLessEqual(len(rec["description"]), 400)
             self.assertTrue(rec["draft"])
 
+    def test_concentration_link_uses_saved_roots(self):
+        rows = [row(f"2026-09-{d:02d}") for d in range(1, 8)] + [row("2026-09-08", cost_usd=20.0)]
+        rows += [row("2026-09-02", project=OTHER, cost_usd=0.5)]
+        roots = [{"root": "ACME", "mode": "cliente"}]
+        recs = cost.cost_recommendations(rows, [], {}, TODAY, roots=roots)
+        conc = next(r for r in recs if r["signature"]["rule"] == "project_concentration")
+        self.assertTrue(conc["evidence"]["link"].startswith("/proyectos/app?"), conc["evidence"]["link"])
+
     def test_informative_rules_are_not_persisted(self):
         rows = [row(f"2026-09-{d:02d}", cost_usd=None) for d in range(1, 4)]
         recs = cost.cost_recommendations(rows, [], {}, TODAY)

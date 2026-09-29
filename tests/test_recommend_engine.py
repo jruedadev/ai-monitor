@@ -289,3 +289,13 @@ class TestCli(unittest.TestCase):
         code, _, _, err = self.call({"side_effect": engine.EngineBusy()})
         self.assertEqual(code, 2)
         self.assertIn("Ya hay una corrida en curso", err)
+
+
+class TestCostRoots(EngineTestCase):
+    def test_cost_recommendations_receive_saved_roots(self):
+        import history
+        roots = [{"root": "ACME", "mode": "cliente"}]
+        history.save_app_settings({"client_roots": roots}, db_path=self.db)
+        with mock.patch.object(engine.cost, "cost_recommendations", return_value=[]) as spy:
+            self.run_engine()
+        self.assertEqual(spy.call_args.kwargs.get("roots"), roots)

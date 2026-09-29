@@ -7,6 +7,7 @@ import sqlite3
 import time
 from datetime import date, datetime, timedelta, timezone
 
+import clients
 import history
 from recommend import cluster as clustering
 from recommend import cost, heuristics, llm, store
@@ -174,6 +175,10 @@ def _analyze(settings, db_path, today, prompt_overrides, session_tokens, runner,
     except sqlite3.Error as exc:
         project_rows, model_rows, roi = [], [], {}
         errors.append(f"history: {exc}")
+    try:
+        roots = briefing.load_client_roots(db_path or history.DB_PATH_DEFAULT)
+    except sqlite3.Error:
+        roots = clients.default_roots()
 
     fields = {"model": None, "attempts": 0, "llm_tokens": 0, "llm_cost": 0.0}
     texts, generators, degraded = {}, {}, False
@@ -227,7 +232,7 @@ def _analyze(settings, db_path, today, prompt_overrides, session_tokens, runner,
     totals = _source_totals(project_rows, since, today.isoformat())
     pattern_recs = [_pattern_rec(c, texts.get(c.cluster_id), generators.get(c.cluster_id),
                                   fields["model"], totals) for c in groups]
-    cost_recs = cost.cost_recommendations(project_rows, model_rows, roi, today)
+    cost_recs = cost.cost_recommendations(project_rows, model_rows, roi, today, roots=roots)
     counts = store.apply_run(db_path, pattern_recs, cost_recs, now_iso())
     return {"status": "degraded" if degraded else "ok", **fields, "prompts": len(prompts),
             "clusters": len(groups), **counts, "error": "; ".join(errors)[:1000] or None}
