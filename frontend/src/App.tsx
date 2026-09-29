@@ -1,5 +1,5 @@
 import { useReducer } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useUsageStream } from "@/hooks/useUsageStream";
 import { useNewRecommendationsCount } from "@/hooks/useRecommendations";
 import { useDashboardRoute } from "@/hooks/useDashboardRoute";
@@ -14,11 +14,15 @@ import { ProjectsView } from "@/views/ProjectsView";
 import { SettingsView } from "@/views/SettingsView";
 import { RecommendationsView } from "@/views/RecommendationsView";
 import { groupProjectsByClient } from "@/lib/clients";
-import { useClientRoots } from "@/hooks/appSettingsContext";
+import { useAppSettings, useClientRoots } from "@/hooks/appSettingsContext";
+import { shouldRedirectToOnboarding } from "@/lib/onboarding";
+import { OnboardingView } from "@/views/OnboardingView";
 
 export default function App() {
   const route = useDashboardRoute();
   const roots = useClientRoots();
+  const appSettings = useAppSettings();
+  const { pathname } = useLocation();
   const { sources, combined, connected, recommendationsVersion } = useUsageStream();
   const [localVersion, bumpRecommendations] = useReducer((n: number) => n + 1, 0);
   const recommendationsKey = `${recommendationsVersion}:${localVersion}`;
@@ -26,6 +30,9 @@ export default function App() {
 
   if (route.redirect) return <Navigate to={route.redirect} replace />;
   if (!route.valid) return <Navigate to="/" replace />;
+  if (appSettings.loading) return <div className="min-h-svh bg-background" aria-busy="true" />;
+  if (shouldRedirectToOnboarding(appSettings, pathname)) return <Navigate to="/bienvenida" replace />;
+  if (route.view === "onboarding") return <OnboardingView sources={sources} />;
 
   const clients = Object.keys(groupProjectsByClient(Object.keys(combined ?? {}), roots)).sort();
 
