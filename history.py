@@ -1,10 +1,13 @@
 """Persistencia local de rollups diarios (ver spec: preserva histórico más
 allá de la ventana de retención de cada proveedor). SQLite, stdlib only.
 """
+import json
 import os
 import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
+
+import clients
 
 DB_PATH_DEFAULT = os.path.expanduser("~/.local/share/ai-monitor/history.db")
 
@@ -27,6 +30,11 @@ CREATE TABLE IF NOT EXISTS pricing (
 CREATE TABLE IF NOT EXISTS roi_settings (
     key TEXT PRIMARY KEY,
     value REAL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
 """
@@ -194,3 +202,69 @@ def save_roi_settings(settings, db_path=None):
         )
     con.commit()
     con.close()
+
+
+# --- Ajustes de la aplicación (spec 2026-09-29 §3.1) ----------------------------
+
+APP_SETTINGS_WRITABLE = ("client_roots",)
+
+
+class AppSettingsError(ValueError):
+    """Payload inválido para /api/app-settings; server.py lo traduce a HTTP 400."""
+
+
+def get_app_settings(db_path=None):
+    """Cada clave inválida o corrupta cae a su valor por defecto; nunca lanza por contenido."""
+    db_path = db_path or DB_PATH_DEFAULT
+    ensure_schema(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        rows = dict(con.execute("SELECT key, value FROM app_settings").fetchall())
+    finally:
+        con.close()
+    completed = None
+    if rows.get("onboarding_completed_at") is not None:
+        try:
+            value = json.loads(rows["onboarding_completed_at"])
+        except ValueError:
+            value = None
+        completed = value if isinstance(value, str) and value else None
+    return {"client_roots": clients.parse_stored_roots(rows.get("client_roots")),
+            "onboarding_completed_at": completed}
+
+
+def validate_app_settings(payload):
+    if not isinstance(payload, dict):
+        raise AppSettingsError("El cuerpo debe ser un objeto JSON")
+    unknown = sorted(set(payload) - set(APP_SETTINGS_WRITABLE))
+    if unknown:
+        raise AppSettingsError(f"Clave desconocida: {unknown[0]}")
+    if "client_roots" not in payload:
+        raise AppSettingsError("Falta client_roots")
+    try:
+        return {"client_roots": clients.normalize_roots(payload["client_roots"])}
+    except clients.ClientRootsError as exc:
+        raise AppSettingsError(str(exc)) from exc
+
+
+def _put_app_setting(db_path, key, value):
+    db_path = db_path or DB_PATH_DEFAULT
+    ensure_schema(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        with con:
+            con.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)",
+                        (key, json.dumps(value, ensure_ascii=False), datetime.now(timezone.utc).isoformat()))
+    finally:
+        con.close()
+
+
+def save_app_settings(settings, db_path=None):
+    """Recibe el resultado de validate_app_settings."""
+    _put_app_setting(db_path, "client_roots", settings["client_roots"])
+
+
+def complete_onboarding(db_path=None, now=None):
+    now = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _put_app_setting(db_path, "onboarding_completed_at", now)
+    return now
