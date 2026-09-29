@@ -6,6 +6,7 @@ import unittest.mock
 from datetime import date
 
 import briefing
+import clients
 import history
 
 TODAY = date(2026, 9, 27)
@@ -417,7 +418,50 @@ class TestBuildContext(unittest.TestCase):
         self.assertEqual([r["tokens"] for r in ctx["rows"]], [5, 7])
         self.assertEqual([r["tokens"] for r in ctx["window_rows"]], [5])
         self.assertEqual(set(ctx), {"source", "today", "window", "rows", "window_rows",
-                                    "project_rows", "model_rows", "settings"})
+                                    "project_rows", "model_rows", "settings", "roots"})
+
+
+
+class TestClientRoots(unittest.TestCase):
+    def setUp(self):
+        self.db = os.path.join(tempfile.mkdtemp(), "history.db")
+
+    def test_top_projects_and_concentration_link_use_given_roots(self):
+        roots = [{"root": "/srv/trabajo", "mode": "plano"}]
+        rows = [row("2026-09-02", project="/srv/trabajo/api", cost=90), row("2026-09-02", project="/tmp/x", cost=10)]
+        data = briefing.build_briefing(rows, [], NO_SETTINGS, TODAY, roots=roots)
+        self.assertEqual(data["top_projects"][0]["client"], "trabajo")
+        link = next(s["link"] for s in data["attention"] if s["id"] == "project_concentration")
+        self.assertTrue(link.startswith("/proyectos/trabajo?"))
+
+    def test_default_roots_when_not_given(self):
+        data = build([row("2026-09-02", project="/home/u/DEV/ACME/app")])
+        self.assertEqual(data["top_projects"][0]["client"], "ACME")
+
+    def test_load_client_roots_without_db_does_not_create_it(self):
+        self.assertEqual(briefing.load_client_roots(self.db), clients.default_roots())
+        self.assertFalse(os.path.exists(self.db))
+
+    def test_load_client_roots_old_db_without_table(self):
+        con = sqlite3.connect(self.db)
+        con.execute("CREATE TABLE daily_project (date TEXT, source TEXT, project TEXT, tokens INTEGER, cost REAL)")
+        con.commit()
+        con.close()
+        self.assertEqual(briefing.load_client_roots(self.db), clients.default_roots())
+
+    def test_load_client_roots_reads_saved_value(self):
+        roots = [{"root": "work", "mode": "cliente"}]
+        history.save_app_settings({"client_roots": roots}, self.db)
+        self.assertEqual(briefing.load_client_roots(self.db), roots)
+
+    def test_get_briefing_uses_saved_roots(self):
+        history.save_app_settings({"client_roots": [{"root": "work", "mode": "cliente"}]}, self.db)
+        history.record_snapshot(
+            {"claude_code": {"/home/u/work/Initech/api": {"by_day": {"2026-09-02": {"tokens": 10, "cost": 5.0}}}},
+             "codex": {}, "opencode": {}, "hermes": {}, "openrouter": {"unavailable": True}},
+            db_path=self.db)
+        data = briefing.get_briefing(db_path=self.db, today=TODAY)
+        self.assertEqual(data["top_projects"][0]["client"], "Initech")
 
 
 if __name__ == "__main__":

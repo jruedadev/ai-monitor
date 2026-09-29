@@ -211,11 +211,11 @@ def _project_costs(rows):
     return costs
 
 
-def top_projects(rows, limit=3):
+def top_projects(rows, roots, limit=3):
     costs = _project_costs(rows)
     total = sum(costs.values())
     ranked = sorted(costs.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]
-    return [{"project": p, "client": client_of(p), "cost": round(c, 2),
+    return [{"project": p, "client": client_of(p, roots), "cost": round(c, 2),
              "share": round(c / total, 3) if total > 0 else 0.0} for p, c in ranked]
 
 
@@ -268,7 +268,7 @@ def rule_project_concentration(ctx):
         "id": "project_concentration", "severity": "info",
         "title": f"{name} concentra el {round(share * 100)} % del gasto del mes",
         "evidence": [f"{project}: {format_usd(cost)} de {format_usd(total)}"],
-        "link": f"/proyectos/{quote(client_of(project), safe='')}?proyecto={quote(project, safe='')}",
+        "link": f"/proyectos/{quote(client_of(project, ctx.get("roots")), safe='')}?proyecto={quote(project, safe='')}",
     }
 
 
@@ -361,24 +361,26 @@ def evaluate_rules(ctx):
 
 # --- Ensamblado ----------------------------------------------------------------
 
-def build_context(project_rows, model_rows, settings, today, source="all"):
+def build_context(project_rows, model_rows, settings, today, source="all", roots=None):
     """Contexto que consumen las RULES: lo usan el briefing y el motor de
     recomendaciones (recommend/cost.py), que lo evalúa por fuente."""
     rows = rows_for_source(source, project_rows, model_rows)
     window = month_window(month_of(today), today.day)
     return {"source": source, "today": today, "window": window, "rows": rows,
             "window_rows": in_range(rows, *window), "project_rows": project_rows,
-            "model_rows": model_rows, "settings": settings}
+            "model_rows": model_rows, "settings": settings,
+            "roots": roots if roots is not None else clients.default_roots()}
 
 
-def build_briefing(project_rows, model_rows, settings, today, source="all", compare=None, degraded=False):
+def build_briefing(project_rows, model_rows, settings, today, source="all", compare=None, degraded=False,
+                   roots=None):
     if source not in VALID_SOURCES:
         raise BriefingError(f"Fuente desconocida: {source}")
     if compare is not None and not _MONTH_RE.match(compare):
         raise BriefingError("El parámetro compare debe tener el formato YYYY-MM")
 
     current = month_of(today)
-    ctx = build_context(project_rows, model_rows, settings, today, source)
+    ctx = build_context(project_rows, model_rows, settings, today, source, roots)
     rows = ctx["rows"]
     start = min((r["date"] for r in rows), default=None)
     eligible = eligible_months(start, current)
@@ -418,7 +420,7 @@ def build_briefing(project_rows, model_rows, settings, today, source="all", comp
         },
         "subscription": (subscription_summary(source, project_rows, settings, window)
                          if source != "openrouter" else subscription_summary("openrouter", [], settings, window)),
-        "top_projects": top_projects(window_rows),
+        "top_projects": top_projects(window_rows, ctx["roots"]),
         "attention": evaluate_rules(ctx),
         "degraded": degraded,
     }
@@ -461,6 +463,22 @@ def load(db_path):
     return project_rows, model_rows, settings
 
 
+def load_client_roots(db_path):
+    """Raíces de cliente en solo lectura. Sin archivo, tabla o clave → por defecto.
+    Los sqlite3.Error se propagan para que get_briefing los marque como degradados."""
+    if not os.path.exists(db_path):
+        return clients.default_roots()
+    con = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
+    try:
+        tables = {name for (name,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if "app_settings" not in tables:
+            return clients.default_roots()
+        row = con.execute("SELECT value FROM app_settings WHERE key = 'client_roots'").fetchone()
+    finally:
+        con.close()
+    return clients.parse_stored_roots(row[0] if row else None)
+
+
 def get_briefing(db_path=None, source="all", compare=None, today=None):
     db_path = db_path or history.DB_PATH_DEFAULT
     today = today or datetime.now(timezone.utc).date()
@@ -468,13 +486,15 @@ def get_briefing(db_path=None, source="all", compare=None, today=None):
         raise BriefingError(f"Fuente desconocida: {source}")
     try:
         project_rows, model_rows, settings = load(db_path)
+        roots = load_client_roots(db_path)
         degraded = False
     except sqlite3.Error as exc:
         log.warning("briefing: no se pudo leer %s: %s", db_path, exc)
         project_rows, model_rows, settings = [], [], _empty_settings()
+        roots = clients.default_roots()
         degraded = True
     return build_briefing(project_rows, model_rows, settings, today,
-                          source=source, compare=compare, degraded=degraded)
+                          source=source, compare=compare, degraded=degraded, roots=roots)
 
 
 # --- CLI -------------------------------------------------------------------------
