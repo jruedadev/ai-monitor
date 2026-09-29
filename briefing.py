@@ -268,7 +268,7 @@ def rule_project_concentration(ctx):
         "id": "project_concentration", "severity": "info",
         "title": f"{name} concentra el {round(share * 100)} % del gasto del mes",
         "evidence": [f"{project}: {format_usd(cost)} de {format_usd(total)}"],
-        "link": f"/proyectos/{quote(client_of(project, ctx.get("roots")), safe='')}?proyecto={quote(project, safe='')}",
+        "link": f"/proyectos/{quote(client_of(project, ctx.get('roots')), safe='')}?proyecto={quote(project, safe='')}",
     }
 
 
