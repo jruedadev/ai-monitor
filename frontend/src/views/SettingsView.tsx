@@ -1,8 +1,12 @@
+import { Link } from "react-router-dom";
+import { RotateCcw } from "lucide-react";
+import { ClientRootsForm } from "@/components/ClientRootsForm";
 import { SettingsForm } from "@/components/SettingsForm";
 import { EngineSettingsForm } from "@/components/EngineSettingsForm";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { UsageSnapshot } from "@/lib/api";
-import { sourceStatuses } from "@/lib/settings";
+import { projectPaths, sourceStatuses } from "@/lib/settings";
+import { viewPath } from "@/lib/routes";
 import { SOURCE_META } from "@/lib/sources";
 
 const STATE_LABEL = { data: "Con datos", empty: "Sin datos", unavailable: "No disponible" } as const;
@@ -11,7 +15,13 @@ export function SettingsView({ sources }: { sources: UsageSnapshot["sources"] | 
   const statuses = sourceStatuses(sources);
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Configuración</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">Configuración</h1>
+        <Link to={viewPath("onboarding")} className="inline-flex items-center gap-1.5 text-sm text-link hover:underline">
+          <RotateCcw className="h-4 w-4" aria-hidden />Repetir configuración inicial
+        </Link>
+      </div>
+      <ClientRootsForm paths={projectPaths(sources)} />
       <SettingsForm />
       <EngineSettingsForm />
       <section aria-labelledby="sources-title" className="rounded-xl border bg-card p-5">

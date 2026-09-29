@@ -37,3 +37,9 @@ export function sourceStatuses(sources: UsageSnapshot["sources"] | null): Source
   );
   return rows;
 }
+
+/** Rutas de proyecto de las fuentes por proyecto (sin OpenRouter), ordenadas y sin duplicar. */
+export function projectPaths(sources: UsageSnapshot["sources"] | null): string[] {
+  if (!sources) return [];
+  return [...new Set(PROJECT_SOURCES.flatMap((key) => Object.keys(sources[key] ?? {})))].sort();
+}

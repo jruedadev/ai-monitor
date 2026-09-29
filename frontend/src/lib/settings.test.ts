@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UsageSnapshot } from "@/lib/api";
-import { sourceStatuses } from "@/lib/settings";
+import { projectPaths, sourceStatuses } from "@/lib/settings";
 
 const usage = { total_tokens: 1 } as UsageSnapshot["sources"]["claude_code"][string];
 
@@ -26,5 +26,16 @@ describe("sourceStatuses", () => {
       openrouter: { unavailable: false, models: { a: { tokens: 1, cost: 1, requests: 1 } } },
     } as UsageSnapshot["sources"];
     expect(sourceStatuses(sources).find((s) => s.key === "openrouter")).toMatchObject({ state: "data", detail: "1 modelo" });
+  });
+});
+
+describe("projectPaths", () => {
+  it("une los proyectos de las cuatro fuentes por proyecto, sin OpenRouter, ordenados y sin duplicar", () => {
+    const sources = {
+      claude_code: { "/b": usage, "/a": usage }, codex: { "/a": usage }, opencode: {}, hermes: { "/c": usage },
+      openrouter: { unavailable: false, models: { m: { tokens: 1, cost: 1, requests: 1 } } },
+    } as UsageSnapshot["sources"];
+    expect(projectPaths(sources)).toEqual(["/a", "/b", "/c"]);
+    expect(projectPaths(null)).toEqual([]);
   });
 });
