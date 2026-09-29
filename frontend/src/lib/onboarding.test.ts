@@ -35,6 +35,14 @@ describe("suggestRoots", () => {
       { root: "DEV", mode: "cliente" },
     ]);
   });
+  it("ignora carpetas ocultas como .claude de los worktrees", () => {
+    const paths = [
+      "/home/u/DEV/ACME/app", "/home/u/DEV/BETA/api",
+      "/home/u/DEV/ACME/app/.claude/worktrees/a", "/home/u/DEV/ACME/app/.claude/worktrees/b",
+    ];
+    expect(suggestRoots(paths)).toEqual([{ root: "DEV", mode: "cliente" }]);
+  });
+
   it("sin proyectos o con uno solo por carpeta → valor por defecto", () => {
     expect(suggestRoots([])).toEqual([{ root: "DEV", mode: "cliente" }]);
     expect(suggestRoots(["/srv/work/A/x"])).toEqual([{ root: "DEV", mode: "cliente" }]);

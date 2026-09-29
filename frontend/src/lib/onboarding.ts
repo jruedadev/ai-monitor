@@ -28,7 +28,7 @@ export function suggestRoots(paths: string[]): ClientRoot[] {
     const idx = segments.length - 3;
     if (idx < 1) continue;
     const name = segments[idx];
-    if (!name || HOME_DIRS.has(name.toLowerCase()) || HOME_DIRS.has(segments[idx - 1].toLowerCase())) continue;
+    if (!name || name.startsWith(".") || HOME_DIRS.has(name.toLowerCase()) || HOME_DIRS.has(segments[idx - 1].toLowerCase())) continue;
     const key = name.toUpperCase();
     const entry = counts.get(key) ?? { name, count: 0 };
     entry.count += 1;
