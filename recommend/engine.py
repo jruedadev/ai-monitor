@@ -129,21 +129,37 @@ def _pattern_rec(c, texts, generator_override, model, totals):
             "generator": generator}
 
 
-def _known_signatures(db_path):
-    out = {}
+def _known_llm_recs(db_path):
+    """(firma, recomendación) de los patrones que ya redactó un LLM real (no reglas
+    ni costo): su texto se reutiliza en vez de reenviar el cluster al LLM."""
     con = store.connect(db_path)
     try:
-        rows = con.execute("SELECT signature, kind, pattern, description, draft, generator FROM recommendations").fetchall()
+        rows = con.execute("SELECT signature, kind, pattern, description, draft, generator FROM recommendations "
+                           "WHERE kind != 'costo' AND generator NOT IN ('reglas', 'costo')").fetchall()
     finally:
         con.close()
+    out = []
     for row in rows:
-        sig, gen = row["signature"], row["generator"]
-        if sig and gen and gen != "reglas":
-            try:
-                out[tuple(sorted(json.loads(sig)))] = dict(row)
-            except (json.JSONDecodeError, TypeError):
-                continue
+        try:
+            signature = set(json.loads(row["signature"]))
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if signature:
+            out.append((signature, dict(row)))
     return out
+
+
+def _reuse_index(signature, known):
+    """Índice de la recomendación conocida que contiene la mayor parte de esta firma
+    (≥ store.SAME_PATTERN_THRESHOLD), o None. Se mide contención y no igualdad: la
+    firma cambia con cada prompt nuevo, y la de un grupo que unió el LLM es la unión
+    de sus candidatos."""
+    best, best_score = None, store.SAME_PATTERN_THRESHOLD
+    for i, (known_sig, _) in enumerate(known):
+        score = len(signature & known_sig) / len(signature) if signature else 0.0
+        if score >= best_score and (best is None or score > best_score):
+            best, best_score = i, score
+    return best
 
 
 def _analyze(settings, db_path, today, prompt_overrides, session_tokens, runner, engine_dir):
@@ -167,9 +183,14 @@ def _analyze(settings, db_path, today, prompt_overrides, session_tokens, runner,
         cands = clustering.candidates(prompts, session_tokens)
         groups = []
         if cands:
-            known = _known_signatures(db_path)
-            reused = [c for c in cands if tuple(sorted(c.signature)) in known]
-            new_cands = [c for c in cands if c not in reused]
+            known = _known_llm_recs(db_path)
+            reused, new_cands = {}, []
+            for c in cands:
+                i = _reuse_index(c.signature, known)
+                if i is None:
+                    new_cands.append(c)
+                else:
+                    reused.setdefault(i, []).append(c)
             result = None
             if new_cands:
                 result = llm.run_llm(new_cands, settings["backend"], settings["llm_chain"],
@@ -177,12 +198,18 @@ def _analyze(settings, db_path, today, prompt_overrides, session_tokens, runner,
                 fields.update(attempts=result["attempts"], llm_tokens=result["llm_tokens"],
                               llm_cost=result["llm_cost"])
                 errors.extend(result["errors"])
-            reused_groups = [clustering.merge([c], c.cluster_id) for c in reused]
-            for c in reused:
-                rec = known[tuple(sorted(c.signature))]
-                texts[c.cluster_id] = {"kind": rec["kind"], "pattern": rec["pattern"],
-                                       "description": rec["description"], "draft": rec["draft"]}
-                generators[c.cluster_id] = rec["generator"]
+            reused_groups = []
+            for i, members in reused.items():
+                # Los candidatos que caen en la misma recomendación vuelven a ser un grupo
+                # (respeta la fusión que hizo el LLM) y llevan su firma, para que
+                # store.apply_run actualice esa fila en vez de crear otra.
+                signature, rec = known[i]
+                group = clustering.merge(members, members[0].cluster_id)
+                group.signature = set(signature)
+                texts[group.cluster_id] = {"kind": rec["kind"], "pattern": rec["pattern"],
+                                           "description": rec["description"], "draft": rec["draft"]}
+                generators[group.cluster_id] = rec["generator"]
+                reused_groups.append(group)
             if result is None or result["ok"]:
                 if result is not None:
                     fields["model"] = result["model"]

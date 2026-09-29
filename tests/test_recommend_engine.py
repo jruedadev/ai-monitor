@@ -200,6 +200,41 @@ class TestRun(EngineTestCase):
         [rec] = store.list_recommendations(self.db)
         self.assertEqual(rec["generator"], "nous:stealth/space-bunny-alpha")
 
+    def test_reuses_known_text_when_cluster_grows(self):
+        # Un prompt nuevo cambia la firma exacta del cluster; la recomendación sigue siendo la misma.
+        SOLO_GROUPED = {"groups": [],
+                        "recommendations": [{"group_id": "c1", "kind": "skill",
+                                             "pattern": "Diagnosticar cobros",
+                                             "description": "Se repite.",
+                                             "draft": "---\nname: x\n---"}]}
+        tokens = self.solo_triple_fixture()
+        self.run_engine(hermes_runner(SOLO_GROUPED), tokens)
+        write_session(self.cc_root, "s4", TEXT_A + " y el webhook de reembolsos pendientes", "2026-09-23")
+        tokens[("claude_code", "s4")] = 5000
+
+        def never(*_):
+            raise AssertionError("no debe llamarse al LLM: el patrón ya está recomendado")
+        run_id, status = self.run_engine(never, tokens)
+        self.assertEqual(status, "ok")
+        self.assertEqual(store.get_run(self.db, run_id)["attempts"], 0)
+        [rec] = store.list_recommendations(self.db)
+        self.assertEqual(rec["generator"], "nous:stealth/space-bunny-alpha")
+        self.assertEqual(rec["evidence"]["sessions"], 4)
+
+    def test_reuses_llm_merged_group_as_a_single_recommendation(self):
+        # El LLM unió A y B; en la corrida siguiente vuelven como candidatos separados.
+        tokens = self.synonyms_fixture()
+        self.run_engine(hermes_runner(GROUPED), tokens)
+
+        def never(*_):
+            raise AssertionError("no debe llamarse al LLM: el grupo ya está recomendado")
+        run_id, status = self.run_engine(never, tokens)
+        self.assertEqual(status, "ok")
+        self.assertEqual(store.get_run(self.db, run_id)["attempts"], 0)
+        [rec] = store.list_recommendations(self.db)
+        self.assertEqual(rec["pattern"], "Diagnosticar fallos de cobro")
+        self.assertEqual(rec["evidence"]["sessions"], 4)
+
     def test_mixed_known_and_new_signatures_only_sends_new_to_llm(self):
         SOLO_GROUPED = {"groups": [],
                         "recommendations": [{"group_id": "c1", "kind": "skill",
