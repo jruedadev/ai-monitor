@@ -7,7 +7,8 @@ import { collectSessions, SESSION_SOURCES, type FlatSession } from "@/lib/sessio
 import { SessionIdentity } from "@/components/SessionIdentity";
 import type { SourceKey } from "@/lib/sources";
 import type { UsageSnapshot } from "@/lib/api";
-import { DEFAULT_CLIENT_ROOTS, clientOf } from "@/lib/clients";
+import { clientOf } from "@/lib/clients";
+import { useClientRoots } from "@/hooks/appSettingsContext";
 import { formatDate, formatInt, formatUsd } from "@/lib/format";
 
 interface SessionDetailProps {
@@ -28,13 +29,14 @@ function groupBySource(rows: FlatSession[]) {
 export function SessionDetail({
   sources, section, clientFilter, selectedDate, onSelectDate, onSelectProject,
 }: SessionDetailProps) {
+  const roots = useClientRoots();
   if (section === "openrouter") {
     return null;
   }
 
   const rawSessions = collectSessions(sources, section);
   const allSessions = clientFilter
-    ? rawSessions.filter((s) => clientOf(s.project, DEFAULT_CLIENT_ROOTS) === clientFilter)
+    ? rawSessions.filter((s) => clientOf(s.project, roots) === clientFilter)
     : rawSessions;
   const availableDates = Array.from(new Set([
     ...allSessions.map((s) => s.date).filter((d): d is string => !!d),

@@ -11,7 +11,8 @@ import {
 import { collectSessions } from "@/lib/sessions";
 import { computeSourceRoi, type CostComparison } from "@/lib/roi";
 import { SOURCE_META } from "@/lib/sources";
-import { DEFAULT_CLIENT_ROOTS, clientOf, groupProjectsByClient } from "@/lib/clients";
+import { clientOf, groupProjectsByClient } from "@/lib/clients";
+import { useClientRoots } from "@/hooks/appSettingsContext";
 import { formatDate, formatDecimal, formatMonth, formatUsd } from "@/lib/format";
 import { withSource } from "@/lib/routes";
 
@@ -34,6 +35,7 @@ const SUBSCRIPTION_START_KEY: Record<RoiSource, "subscription_start_claude" | "s
 
 export function RoiView({ sources }: RoiViewProps) {
   const { search } = useLocation();
+  const roots = useClientRoots();
   const [settings, setSettings] = useState<RoiSettings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [scopeFilter, setScopeFilter] = useState<string>("");
@@ -71,12 +73,12 @@ export function RoiView({ sources }: RoiViewProps) {
   const allProjectPaths = Array.from(
     new Set(ROI_SOURCES.flatMap((source) => Object.keys(sources?.[source] ?? {}))),
   );
-  const projectsByClient = groupProjectsByClient(allProjectPaths, DEFAULT_CLIENT_ROOTS);
+  const projectsByClient = groupProjectsByClient(allProjectPaths, roots);
   const clientOptions = Object.keys(projectsByClient).sort();
 
   const matchesScope = (path: string): boolean => {
     if (!scopeFilter) return true;
-    if (scopeFilter.startsWith("client:")) return clientOf(path, DEFAULT_CLIENT_ROOTS) === scopeFilter.slice(7);
+    if (scopeFilter.startsWith("client:")) return clientOf(path, roots) === scopeFilter.slice(7);
     if (scopeFilter.startsWith("project:")) return path === scopeFilter.slice(8);
     return true;
   };

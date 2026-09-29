@@ -4,7 +4,8 @@ import { KpiCards } from "@/components/KpiCards";
 import { ProjectTable } from "@/components/ProjectTable";
 import { SectionFallback } from "@/views/SectionFallback";
 import type { ProjectUsage, UsageSnapshot } from "@/lib/api";
-import { DEFAULT_CLIENT_ROOTS, groupProjectsByClient } from "@/lib/clients";
+import { groupProjectsByClient } from "@/lib/clients";
+import { useClientRoots } from "@/hooks/appSettingsContext";
 import { formatInt, formatUsd } from "@/lib/format";
 import { projectsFor } from "@/lib/projects";
 import { viewPath, withSource } from "@/lib/routes";
@@ -20,6 +21,7 @@ interface ProjectsViewProps {
 
 export function ProjectsView({ client, source, sources, combined, onSelectProject }: ProjectsViewProps) {
   const { search } = useLocation();
+  const roots = useClientRoots();
 
   if (source === "openrouter") {
     return (
@@ -35,7 +37,7 @@ export function ProjectsView({ client, source, sources, combined, onSelectProjec
   if (!combined) return <SectionFallback label="Cargando proyectos" />;
 
   if (client) {
-    const projects = projectsFor(sources, combined, source, client, DEFAULT_CLIENT_ROOTS);
+    const projects = projectsFor(sources, combined, source, client, roots);
     return (
       <div className="space-y-6">
         <div className="space-y-1">
@@ -50,8 +52,8 @@ export function ProjectsView({ client, source, sources, combined, onSelectProjec
     );
   }
 
-  const all = projectsFor(sources, combined, source, null, DEFAULT_CLIENT_ROOTS);
-  const clients = Object.entries(groupProjectsByClient(Object.keys(all), DEFAULT_CLIENT_ROOTS))
+  const all = projectsFor(sources, combined, source, null, roots);
+  const clients = Object.entries(groupProjectsByClient(Object.keys(all), roots))
     .map(([name, paths]) => ({ name, count: paths.length, cost: paths.reduce((sum, p) => sum + all[p].cost, 0) }))
     .sort((a, b) => b.cost - a.cost);
 

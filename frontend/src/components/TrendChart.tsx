@@ -4,8 +4,9 @@ import { LineChart } from "@tremor/react";
 import { AlertCircle, MousePointerClick, RotateCw, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useHistory } from "@/hooks/useHistory";
+import { useClientRoots } from "@/hooks/appSettingsContext";
 import { SOURCE_META } from "@/lib/sources";
-import { DEFAULT_CLIENT_ROOTS, clientOf, type ClientRoot } from "@/lib/clients";
+import { clientOf, type ClientRoot } from "@/lib/clients";
 import { formatCompact, formatDate, formatDayShort } from "@/lib/format";
 import type { HistoryResponse } from "@/lib/api";
 import type { SourceKey } from "@/lib/sources";
@@ -61,6 +62,7 @@ function buildSeries(data: HistoryResponse, section: SourceKey, clientFilter: st
 
 export function TrendChart({ section, clientFilter, selectedDate, onSelectDate }: TrendChartProps) {
   const history = useHistory(HISTORY_DAYS);
+  const roots = useClientRoots();
   // Día bajo el cursor (lo reporta el tooltip): permite seleccionar haciendo
   // clic en cualquier punto de la columna, no solo sobre el marcador de 5px.
   const hoveredDate = useRef<string | null>(null);
@@ -82,7 +84,7 @@ export function TrendChart({ section, clientFilter, selectedDate, onSelectDate }
   // la vista agregada ("Todo") no es ninguna fuente, así que va en tinta neutra.
   const strokeStyle = { "--trend-stroke": sourceMeta?.color ?? "var(--foreground)" } as CSSProperties;
 
-  const chartData = history.status === "ready" ? buildSeries(history.data, section, clientFilter, DEFAULT_CLIENT_ROOTS) : [];
+  const chartData = history.status === "ready" ? buildSeries(history.data, section, clientFilter, roots) : [];
   const nonZero = chartData.filter((d) => d.Tokens > 0);
   const avg = nonZero.length ? nonZero.reduce((s, d) => s + d.Tokens, 0) / nonZero.length : 0;
   const max = chartData.reduce((m, d) => Math.max(m, d.Tokens), 0);

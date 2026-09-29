@@ -13,10 +13,12 @@ import { SpendView } from "@/views/SpendView";
 import { ProjectsView } from "@/views/ProjectsView";
 import { SettingsView } from "@/views/SettingsView";
 import { RecommendationsView } from "@/views/RecommendationsView";
-import { DEFAULT_CLIENT_ROOTS, groupProjectsByClient } from "@/lib/clients";
+import { groupProjectsByClient } from "@/lib/clients";
+import { useClientRoots } from "@/hooks/appSettingsContext";
 
 export default function App() {
   const route = useDashboardRoute();
+  const roots = useClientRoots();
   const { sources, combined, connected, recommendationsVersion } = useUsageStream();
   const [localVersion, bumpRecommendations] = useReducer((n: number) => n + 1, 0);
   const recommendationsKey = `${recommendationsVersion}:${localVersion}`;
@@ -25,7 +27,7 @@ export default function App() {
   if (route.redirect) return <Navigate to={route.redirect} replace />;
   if (!route.valid) return <Navigate to="/" replace />;
 
-  const clients = Object.keys(groupProjectsByClient(Object.keys(combined ?? {}), DEFAULT_CLIENT_ROOTS)).sort();
+  const clients = Object.keys(groupProjectsByClient(Object.keys(combined ?? {}), roots)).sort();
 
   return (
     <SidebarProvider className="bg-background text-foreground">
