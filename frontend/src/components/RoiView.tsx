@@ -11,7 +11,7 @@ import {
 import { collectSessions } from "@/lib/sessions";
 import { computeSourceRoi, type CostComparison } from "@/lib/roi";
 import { SOURCE_META } from "@/lib/sources";
-import { clientOf, groupProjectsByClient } from "@/lib/clients";
+import { DEFAULT_CLIENT_ROOTS, clientOf, groupProjectsByClient } from "@/lib/clients";
 import { formatDate, formatDecimal, formatMonth, formatUsd } from "@/lib/format";
 import { withSource } from "@/lib/routes";
 
@@ -71,12 +71,12 @@ export function RoiView({ sources }: RoiViewProps) {
   const allProjectPaths = Array.from(
     new Set(ROI_SOURCES.flatMap((source) => Object.keys(sources?.[source] ?? {}))),
   );
-  const projectsByClient = groupProjectsByClient(allProjectPaths);
+  const projectsByClient = groupProjectsByClient(allProjectPaths, DEFAULT_CLIENT_ROOTS);
   const clientOptions = Object.keys(projectsByClient).sort();
 
   const matchesScope = (path: string): boolean => {
     if (!scopeFilter) return true;
-    if (scopeFilter.startsWith("client:")) return clientOf(path) === scopeFilter.slice(7);
+    if (scopeFilter.startsWith("client:")) return clientOf(path, DEFAULT_CLIENT_ROOTS) === scopeFilter.slice(7);
     if (scopeFilter.startsWith("project:")) return path === scopeFilter.slice(8);
     return true;
   };

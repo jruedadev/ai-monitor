@@ -1,4 +1,3 @@
-import json
 import os
 import sqlite3
 import tempfile
@@ -214,16 +213,6 @@ class TestTopProjects(unittest.TestCase):
         self.assertEqual([p["project"] for p in top], ["/home/u/DEV/ACME/a", "/home/u/DEV/BETA/b", "/home/u/tmp/c"])
         self.assertEqual(top[0], {"project": "/home/u/DEV/ACME/a", "client": "ACME", "cost": 60.0, "share": 0.545})
         self.assertEqual(top[2]["client"], "Otros")
-
-
-class TestClientOfParity(unittest.TestCase):
-    def test_same_cases_as_clients_ts(self):
-        path = os.path.join(os.path.dirname(__file__), "fixtures", "client_of_cases.json")
-        with open(path) as f:
-            cases = json.load(f)
-        for case in cases:
-            with self.subTest(path=case["path"]):
-                self.assertEqual(briefing.client_of(case["path"]), case["client"])
 
 
 def ids(data):

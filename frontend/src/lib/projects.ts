@@ -1,5 +1,5 @@
 import type { ProjectUsage, UsageSnapshot } from "@/lib/api";
-import { clientOf } from "@/lib/clients";
+import { clientOf, type ClientRoot } from "@/lib/clients";
 import type { SourceKey } from "@/lib/sources";
 
 /** Proyectos (o modelos, en OpenRouter) para una fuente, opcionalmente acotados a un cliente. */
@@ -8,6 +8,7 @@ export function projectsFor(
   combined: Record<string, ProjectUsage> | null,
   source: SourceKey,
   client: string | null,
+  roots: ClientRoot[],
 ): Record<string, ProjectUsage> {
   if (!sources || !combined) return {};
 
@@ -33,5 +34,5 @@ export function projectsFor(
   }
 
   if (!client) return result;
-  return Object.fromEntries(Object.entries(result).filter(([path]) => clientOf(path) === client));
+  return Object.fromEntries(Object.entries(result).filter(([path]) => clientOf(path, roots) === client));
 }

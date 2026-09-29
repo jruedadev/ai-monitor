@@ -1,5 +1,5 @@
 import type { ProjectUsage, UsageSnapshot } from "@/lib/api";
-import { clientOf, groupProjectsByClient } from "@/lib/clients";
+import { clientOf, groupProjectsByClient, type ClientRoot } from "@/lib/clients";
 import { formatDate } from "@/lib/format";
 import { sourceSlug, viewPath, type ViewKey } from "@/lib/routes";
 import { collectSessions } from "@/lib/sessions";
@@ -35,13 +35,14 @@ const MAX_SESSIONS = 500;
 export function buildCommandEntries(
   sources: UsageSnapshot["sources"] | null,
   combined: Record<string, ProjectUsage> | null,
+  roots: ClientRoot[],
 ): CommandEntry[] {
   const entries: CommandEntry[] = VIEWS.map((v) => ({
     id: `view:${v.view}`, group: "Vistas", label: v.label, to: viewPath(v.view), keywords: v.keywords,
   }));
 
   const paths = Object.keys(combined ?? {}).sort();
-  for (const client of Object.keys(groupProjectsByClient(paths)).sort()) {
+  for (const client of Object.keys(groupProjectsByClient(paths, roots)).sort()) {
     entries.push({ id: `client:${client}`, group: "Clientes", label: client, to: viewPath("projects", client), keywords: [] });
   }
   for (const path of paths) {
@@ -50,8 +51,8 @@ export function buildCommandEntries(
       group: "Proyectos",
       label: basename(path),
       hint: path,
-      to: `${viewPath("projects", clientOf(path))}?proyecto=${encodeURIComponent(path)}`,
-      keywords: [path, clientOf(path)],
+      to: `${viewPath("projects", clientOf(path, roots))}?proyecto=${encodeURIComponent(path)}`,
+      keywords: [path, clientOf(path, roots)],
       // Un proyecto puede no tener uso en la fuente filtrada actual (?fuente=): abrir sin
       // heredarla evita un ProjectDetailSheet vacío.
       keepSource: false,

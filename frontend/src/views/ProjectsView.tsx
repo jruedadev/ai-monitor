@@ -4,7 +4,7 @@ import { KpiCards } from "@/components/KpiCards";
 import { ProjectTable } from "@/components/ProjectTable";
 import { SectionFallback } from "@/views/SectionFallback";
 import type { ProjectUsage, UsageSnapshot } from "@/lib/api";
-import { groupProjectsByClient } from "@/lib/clients";
+import { DEFAULT_CLIENT_ROOTS, groupProjectsByClient } from "@/lib/clients";
 import { formatInt, formatUsd } from "@/lib/format";
 import { projectsFor } from "@/lib/projects";
 import { viewPath, withSource } from "@/lib/routes";
@@ -35,7 +35,7 @@ export function ProjectsView({ client, source, sources, combined, onSelectProjec
   if (!combined) return <SectionFallback label="Cargando proyectos" />;
 
   if (client) {
-    const projects = projectsFor(sources, combined, source, client);
+    const projects = projectsFor(sources, combined, source, client, DEFAULT_CLIENT_ROOTS);
     return (
       <div className="space-y-6">
         <div className="space-y-1">
@@ -50,8 +50,8 @@ export function ProjectsView({ client, source, sources, combined, onSelectProjec
     );
   }
 
-  const all = projectsFor(sources, combined, source, null);
-  const clients = Object.entries(groupProjectsByClient(Object.keys(all)))
+  const all = projectsFor(sources, combined, source, null, DEFAULT_CLIENT_ROOTS);
+  const clients = Object.entries(groupProjectsByClient(Object.keys(all), DEFAULT_CLIENT_ROOTS))
     .map(([name, paths]) => ({ name, count: paths.length, cost: paths.reduce((sum, p) => sum + all[p].cost, 0) }))
     .sort((a, b) => b.cost - a.cost);
 

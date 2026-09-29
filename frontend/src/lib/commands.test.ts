@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectUsage, UsageSnapshot } from "@/lib/api";
 import { buildCommandEntries } from "@/lib/commands";
+import { DEFAULT_CLIENT_ROOTS } from "@/lib/clients";
 
 const combined: Record<string, ProjectUsage> = {
   "/home/u/DEV/ACME/app": { total_tokens: 1, cost: 1, messages: 1, session_count: 1, by_source: ["claude_code"] },
@@ -18,7 +19,7 @@ const sources = {
 } as unknown as UsageSnapshot["sources"];
 
 describe("buildCommandEntries", () => {
-  const entries = buildCommandEntries(sources, combined);
+  const entries = buildCommandEntries(sources, combined, DEFAULT_CLIENT_ROOTS);
   const byGroup = (g: string) => entries.filter((e) => e.group === g);
 
   it("incluye las siete vistas", () => {
@@ -38,7 +39,7 @@ describe("buildCommandEntries", () => {
     });
   });
   it("sin snapshot solo quedan las vistas", () => {
-    expect(buildCommandEntries(null, null).every((e) => e.group === "Vistas")).toBe(true);
+    expect(buildCommandEntries(null, null, DEFAULT_CLIENT_ROOTS).every((e) => e.group === "Vistas")).toBe(true);
   });
   it("ids únicos", () => {
     expect(new Set(entries.map((e) => e.id)).size).toBe(entries.length);

@@ -1,4 +1,5 @@
 import { Suspense, lazy } from "react";
+import { DEFAULT_CLIENT_ROOTS } from "@/lib/clients";
 import { Link, useLocation } from "react-router-dom";
 import { KpiCards } from "@/components/KpiCards";
 import { ProjectTable } from "@/components/ProjectTable";
@@ -29,7 +30,7 @@ interface SpendViewProps {
 
 export function SpendView({ tab, source, sources, combined, selectedDate, onSelectDate, onSelectProject }: SpendViewProps) {
   const { search } = useLocation();
-  const projects = projectsFor(sources, combined, source, null);
+  const projects = projectsFor(sources, combined, source, null, DEFAULT_CLIENT_ROOTS);
   const openRouterUnavailable = source === "openrouter" && sources?.openrouter?.unavailable;
 
   return (

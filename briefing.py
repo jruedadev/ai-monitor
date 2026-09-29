@@ -13,6 +13,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
+import clients
 import history
 
 log = logging.getLogger(__name__)
@@ -197,13 +198,9 @@ def subscription_summary(source, project_rows, settings, window):
 
 # --- Proyectos -----------------------------------------------------------------
 
-def client_of(path):
-    """Port de clientOf (frontend/src/lib/clients.ts): segmento tras "DEV" o "Otros"."""
-    segments = path.split("/")
-    for idx, segment in enumerate(segments):
-        if segment.upper() == "DEV":
-            return segments[idx + 1] if idx + 1 < len(segments) else "Otros"
-    return "Otros"
+def client_of(path, roots=None):
+    """Cliente del proyecto según las raíces configuradas (clients.client_of)."""
+    return clients.client_of(path, roots if roots is not None else clients.default_roots())
 
 
 def _project_costs(rows):

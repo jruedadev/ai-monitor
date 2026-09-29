@@ -1,9 +1,18 @@
 [
-  {"path": "/home/u/DEV/GLOBEX/ai-monitor", "client": "GLOBEX"},
-  {"path": "/home/u/dev/Acme/app", "client": "Acme"},
-  {"path": "/home/u/Dev/Mixto/x", "client": "Mixto"},
-  {"path": "/srv/DEV/A/DEV/B/app", "client": "A"},
-  {"path": "/home/u/DEV", "client": "Otros"},
-  {"path": "/home/u/projects/app", "client": "Otros"},
-  {"path": "", "client": "Otros"}
+  {"roots": null, "path": "/home/u/DEV/GLOBEX/ai-monitor", "client": "GLOBEX"},
+  {"roots": null, "path": "/home/u/dev/Acme/app", "client": "Acme"},
+  {"roots": null, "path": "/home/u/Dev/Mixto/x", "client": "Mixto"},
+  {"roots": null, "path": "/srv/DEV/A/DEV/B/app", "client": "A"},
+  {"roots": null, "path": "/home/u/DEV", "client": "Otros"},
+  {"roots": null, "path": "/home/u/projects/app", "client": "Otros"},
+  {"roots": null, "path": "", "client": "Otros"},
+  {"roots": [{"root": "proyectos", "mode": "plano"}], "path": "/home/u/proyectos/app", "client": "proyectos"},
+  {"roots": [{"root": "/srv/trabajo", "mode": "plano"}], "path": "/srv/trabajo/app", "client": "trabajo"},
+  {"roots": [{"root": "/srv/trabajo", "mode": "cliente"}], "path": "/srv/trabajo/Acme/app", "client": "Acme"},
+  {"roots": [{"root": "/srv/trabajo", "mode": "cliente"}], "path": "/srv/trabajo2/Acme/app", "client": "Otros"},
+  {"roots": [{"root": "/srv/trabajo", "mode": "cliente"}], "path": "/srv/trabajo", "client": "Otros"},
+  {"roots": [{"root": "/Srv/trabajo", "mode": "plano"}], "path": "/srv/trabajo/app", "client": "Otros"},
+  {"roots": [{"root": "work", "mode": "cliente"}], "path": "/home/u/WORK/Initech/api", "client": "Initech"},
+  {"roots": [{"root": "clientes", "mode": "cliente"}, {"root": "DEV", "mode": "cliente"}], "path": "/home/u/DEV/clientes/Globex/app", "client": "Globex"},
+  {"roots": [{"root": "DEV", "mode": "cliente"}, {"root": "clientes", "mode": "cliente"}], "path": "/home/u/DEV/clientes/Globex/app", "client": "clientes"}
 ]

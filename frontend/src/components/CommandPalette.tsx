@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { DEFAULT_CLIENT_ROOTS } from "@/lib/clients";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
@@ -17,7 +18,7 @@ interface CommandPaletteProps {
 export function CommandPalette({ open, onOpenChange, sources, combined }: CommandPaletteProps) {
   const navigate = useNavigate();
   const { search } = useLocation();
-  const entries = useMemo(() => buildCommandEntries(sources, combined), [sources, combined]);
+  const entries = useMemo(() => buildCommandEntries(sources, combined, DEFAULT_CLIENT_ROOTS), [sources, combined]);
 
   const go = (entry: CommandEntry) => {
     onOpenChange(false);

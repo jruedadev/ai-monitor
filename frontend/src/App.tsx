@@ -13,7 +13,7 @@ import { SpendView } from "@/views/SpendView";
 import { ProjectsView } from "@/views/ProjectsView";
 import { SettingsView } from "@/views/SettingsView";
 import { RecommendationsView } from "@/views/RecommendationsView";
-import { groupProjectsByClient } from "@/lib/clients";
+import { DEFAULT_CLIENT_ROOTS, groupProjectsByClient } from "@/lib/clients";
 
 export default function App() {
   const route = useDashboardRoute();
@@ -25,7 +25,7 @@ export default function App() {
   if (route.redirect) return <Navigate to={route.redirect} replace />;
   if (!route.valid) return <Navigate to="/" replace />;
 
-  const clients = Object.keys(groupProjectsByClient(Object.keys(combined ?? {}))).sort();
+  const clients = Object.keys(groupProjectsByClient(Object.keys(combined ?? {}), DEFAULT_CLIENT_ROOTS)).sort();
 
   return (
     <SidebarProvider className="bg-background text-foreground">

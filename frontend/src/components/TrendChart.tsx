@@ -5,7 +5,7 @@ import { AlertCircle, MousePointerClick, RotateCw, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useHistory } from "@/hooks/useHistory";
 import { SOURCE_META } from "@/lib/sources";
-import { clientOf } from "@/lib/clients";
+import { DEFAULT_CLIENT_ROOTS, clientOf, type ClientRoot } from "@/lib/clients";
 import { formatCompact, formatDate, formatDayShort } from "@/lib/format";
 import type { HistoryResponse } from "@/lib/api";
 import type { SourceKey } from "@/lib/sources";
@@ -27,7 +27,7 @@ interface ChartPoint {
   Tokens: number;
 }
 
-function buildSeries(data: HistoryResponse, section: SourceKey, clientFilter?: string | null): ChartPoint[] {
+function buildSeries(data: HistoryResponse, section: SourceKey, clientFilter: string | null | undefined, roots: ClientRoot[]): ChartPoint[] {
   const byDate: Record<string, number> = {};
   if (section === "openrouter") {
     for (const row of data.daily_model) {
@@ -37,7 +37,7 @@ function buildSeries(data: HistoryResponse, section: SourceKey, clientFilter?: s
     }
   } else {
     for (const row of data.daily_project) {
-      if (clientFilter && clientOf(row.project) !== clientFilter) continue;
+      if (clientFilter && clientOf(row.project, roots) !== clientFilter) continue;
       if (section !== "all" && row.source !== section) continue;
       const date = row.date.slice(0, 10);
       byDate[date] = (byDate[date] ?? 0) + row.tokens;
@@ -82,7 +82,7 @@ export function TrendChart({ section, clientFilter, selectedDate, onSelectDate }
   // la vista agregada ("Todo") no es ninguna fuente, así que va en tinta neutra.
   const strokeStyle = { "--trend-stroke": sourceMeta?.color ?? "var(--foreground)" } as CSSProperties;
 
-  const chartData = history.status === "ready" ? buildSeries(history.data, section, clientFilter) : [];
+  const chartData = history.status === "ready" ? buildSeries(history.data, section, clientFilter, DEFAULT_CLIENT_ROOTS) : [];
   const nonZero = chartData.filter((d) => d.Tokens > 0);
   const avg = nonZero.length ? nonZero.reduce((s, d) => s + d.Tokens, 0) / nonZero.length : 0;
   const max = chartData.reduce((m, d) => Math.max(m, d.Tokens), 0);
