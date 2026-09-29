@@ -11,7 +11,7 @@ import {
   type AvailableBackends, type EngineBackend, type UsageSnapshot,
 } from "@/lib/api";
 import type { ClientRoot } from "@/lib/clients";
-import { ONBOARDING_STEPS, saveOnboarding, skipDraft, suggestBackend, suggestRoots, type OnboardingDraft } from "@/lib/onboarding";
+import { ONBOARDING_STEPS, saveOnboarding, skipOutcome, suggestBackend, suggestRoots, type OnboardingDraft } from "@/lib/onboarding";
 import { BACKEND_OPTIONS, parseChain } from "@/lib/recommendations";
 import { plansWithData, roiPayload, toRoiDraft, type RoiDraft } from "@/lib/roiDraft";
 import { projectPaths, sourceStatuses } from "@/lib/settings";
@@ -152,8 +152,12 @@ export function OnboardingView({ sources }: { sources: UsageSnapshot["sources"] 
       )}
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-        <Button variant="ghost" disabled={saving} onClick={() => finish(skipDraft(loaded.available, parseChain(loaded.chain)))}>
-          Omitir
+        <Button variant="ghost" disabled={saving} onClick={() => {
+          const skip = skipOutcome(completedAt, loaded.available, parseChain(loaded.chain));
+          if (skip) finish(skip);
+          else navigate("/configuracion");
+        }}>
+          {firstTime ? "Omitir" : "Cancelar"}
         </Button>
         <div className="flex gap-2">
           <Button variant="outline" disabled={saving || step === 0} onClick={() => setStep(step - 1)}>Atrás</Button>

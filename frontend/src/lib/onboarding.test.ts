@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { HttpError } from "@/lib/api";
 import {
-  saveOnboarding, shouldRedirectToOnboarding, skipDraft, suggestBackend, suggestRoots, type OnboardingDraft,
+  saveOnboarding, shouldRedirectToOnboarding, skipDraft, skipOutcome, suggestBackend, suggestRoots, type OnboardingDraft,
 } from "@/lib/onboarding";
 
 const ready = { loading: false, error: null, degraded: false, completedAt: null };
@@ -107,5 +107,17 @@ describe("skipDraft", () => {
     expect(skipDraft({ hermes: false, claude: true }, ["a:b:free"])).toEqual({
       roots: [{ root: "DEV", mode: "cliente" }], roi: null, engine: { backend: "claude", llm_chain: ["a:b:free"] },
     });
+  });
+});
+
+describe("skipOutcome", () => {
+  const available = { hermes: true, claude: false };
+
+  it("la primera vez omitir guarda los valores por defecto", () => {
+    expect(skipOutcome(null, available, ["a:b:free"])).toEqual(skipDraft(available, ["a:b:free"]));
+  });
+
+  it("al repetir la configuración omitir no guarda nada", () => {
+    expect(skipOutcome("2026-09-29T10:00:00+00:00", available, ["a:b:free"])).toBeNull();
   });
 });

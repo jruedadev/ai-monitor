@@ -95,3 +95,9 @@ export function skipDraft(available: AvailableBackends, llmChain: string[]): Onb
     engine: { backend: suggestBackend(available), llm_chain: llmChain },
   };
 }
+
+/** Qué hace "Omitir": la primera vez guarda los valores por defecto; al repetir la
+ * configuración (null) sale sin tocar nada de lo ya guardado (spec §4.3). */
+export function skipOutcome(completedAt: string | null, available: AvailableBackends, llmChain: string[]): OnboardingDraft | null {
+  return completedAt === null ? skipDraft(available, llmChain) : null;
+}
