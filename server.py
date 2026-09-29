@@ -6,6 +6,7 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 import sqlite3
 import threading
 import time
@@ -13,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 import briefing
+import clients
 import history
 import main
 from recommend import engine as rec_engine
@@ -22,6 +24,20 @@ from sse import SSEBroker, format_sse_event
 
 _state_lock = threading.Lock()
 _state = {"sources": {}, "combined": {}}
+
+AVAILABLE_BACKENDS = ("hermes", "claude")
+
+
+def _available_backends():
+    """Se evalúa en cada request: refleja una instalación hecha sin reiniciar el server."""
+    return {name: shutil.which(name) is not None for name in AVAILABLE_BACKENDS}
+
+
+def _app_settings_payload(db_path):
+    try:
+        return {**history.get_app_settings(db_path=db_path), "degraded": False}
+    except sqlite3.Error:
+        return {"client_roots": clients.default_roots(), "onboarding_completed_at": None, "degraded": True}
 
 
 def _recompute_and_maybe_publish(broker):
@@ -122,6 +138,8 @@ def make_handler(static_dir, broker, db_path=None, engine_opts=None):
                 self._send_json(json.dumps(data))
             elif parsed.path == "/api/roi-settings":
                 self._send_json(json.dumps(history.get_roi_settings(db_path=db_path)))
+            elif parsed.path == "/api/app-settings":
+                self._send_json(json.dumps(_app_settings_payload(db_path)))
             elif parsed.path == "/api/recommendations":
                 estado = parse_qs(parsed.query).get("estado", ["nueva"])[0]
                 if estado not in REC_ESTADOS:
@@ -133,6 +151,7 @@ def make_handler(static_dir, broker, db_path=None, engine_opts=None):
                     data = rec_store.get_engine_settings(db_path)
                 except sqlite3.Error:
                     data = {"backend": rec_settings.DEFAULT_BACKEND, "llm_chain": list(rec_settings.DEFAULT_CHAIN)}
+                data["available"] = _available_backends()
                 self._send_json(json.dumps(data))
             elif parsed.path == "/api/stream":
                 self._handle_sse()
@@ -154,6 +173,30 @@ def make_handler(static_dir, broker, db_path=None, engine_opts=None):
                     return
                 history.save_roi_settings(settings, db_path=db_path)
                 self._send_json(json.dumps(history.get_roi_settings(db_path=db_path)))
+            elif parsed.path == "/api/app-settings":
+                body = self._read_json_body()
+                if body is _INVALID:
+                    return
+                try:
+                    clean = history.validate_app_settings(body)
+                except history.AppSettingsError as exc:
+                    self._send_json(json.dumps({"error": str(exc)}), status=400)
+                    return
+                try:
+                    history.save_app_settings(clean, db_path=db_path)
+                except sqlite3.Error as exc:
+                    self._send_json(json.dumps({"error": f"Base no disponible: {exc}"}), status=503)
+                    return
+                self._send_json(json.dumps(_app_settings_payload(db_path)))
+            elif parsed.path == "/api/app-settings/onboarding":
+                if self._read_json_body() is _INVALID:
+                    return
+                try:
+                    stamp = history.complete_onboarding(db_path=db_path)
+                except sqlite3.Error as exc:
+                    self._send_json(json.dumps({"error": f"Base no disponible: {exc}"}), status=503)
+                    return
+                self._send_json(json.dumps({"onboarding_completed_at": stamp}))
             elif parsed.path == "/api/recommendations/run":
                 if self._read_json_body() is _INVALID:
                     return

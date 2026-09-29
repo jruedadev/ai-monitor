@@ -172,7 +172,10 @@ class TestEngineSettings(RecommendationsAPITestCase):
     def test_roundtrip_and_validation(self):
         payload = {"backend": "claude", "llm_chain": ["nous:upstage/solar-pro4:free"]}
         self.assertEqual(self.request("POST", "/api/engine-settings", payload), (200, payload))
-        self.assertEqual(self.request("GET", "/api/engine-settings"), (200, payload))
+        status, body = self.request("GET", "/api/engine-settings")
+        self.assertEqual(status, 200)
+        self.assertEqual({k: body[k] for k in payload}, payload)
+        self.assertEqual(set(body["available"]), {"hermes", "claude"})
         status, body = self.request("POST", "/api/engine-settings",
                                     {"backend": "hermes", "llm_chain": ["openrouter:openai/gpt-5"]})
         self.assertEqual(status, 400)
@@ -180,6 +183,43 @@ class TestEngineSettings(RecommendationsAPITestCase):
         self.assertEqual(self.request("POST", "/api/engine-settings", {"backend": "x"})[0], 400)
         self.assertEqual(self.request("POST", "/api/engine-settings", payload, "text/plain")[0], 415)
 
+    def test_available_reflects_path(self):
+        with patch("server.shutil.which", side_effect=lambda name: "/x/hermes" if name == "hermes" else None):
+            body = self.request("GET", "/api/engine-settings")[1]
+        self.assertEqual(body["available"], {"hermes": True, "claude": False})
+
+
+class TestAppSettings(RecommendationsAPITestCase):
+    ROOTS = [{"root": "/srv/trabajo", "mode": "plano"}]
+
+    def test_defaults_then_roundtrip(self):
+        self.assertEqual(self.request("GET", "/api/app-settings"), (200, {
+            "client_roots": [{"root": "DEV", "mode": "cliente"}], "onboarding_completed_at": None, "degraded": False}))
+        status, body = self.request("POST", "/api/app-settings", {"client_roots": [{"root": "/srv/trabajo/", "mode": "plano"}]})
+        self.assertEqual((status, body["client_roots"]), (200, self.ROOTS))
+        self.assertEqual(self.request("GET", "/api/app-settings")[1]["client_roots"], self.ROOTS)
+
+    def test_validation_and_content_type(self):
+        status, body = self.request("POST", "/api/app-settings", {"client_roots": []})
+        self.assertEqual(status, 400)
+        self.assertIn("entre 1 y 20", body["error"])
+        self.assertEqual(self.request("POST", "/api/app-settings", {"otra": 1})[0], 400)
+        self.assertEqual(self.request("POST", "/api/app-settings", {"client_roots": self.ROOTS}, "text/plain")[0], 415)
+
+    def test_complete_onboarding(self):
+        status, body = self.request("POST", "/api/app-settings/onboarding", {})
+        self.assertEqual(status, 200)
+        stamp = body["onboarding_completed_at"]
+        self.assertTrue(stamp)
+        self.assertEqual(self.request("GET", "/api/app-settings")[1]["onboarding_completed_at"], stamp)
+        self.assertEqual(self.request("POST", "/api/app-settings/onboarding", b"", "text/plain")[0], 415)
+
+    def test_sqlite_error_is_degraded_not_500(self):
+        with patch("server.history.get_app_settings", side_effect=sqlite3.OperationalError("disk I/O")):
+            status, body = self.request("GET", "/api/app-settings")
+        self.assertEqual((status, body["degraded"], body["onboarding_completed_at"]), (200, True, None))
+        with patch("server.history.save_app_settings", side_effect=sqlite3.OperationalError("disk I/O")):
+            self.assertEqual(self.request("POST", "/api/app-settings", {"client_roots": self.ROOTS})[0], 503)
 
 class TestCheckRecommendationRuns(unittest.TestCase):
     def setUp(self):
