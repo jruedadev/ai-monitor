@@ -4,7 +4,7 @@ Description=ai-monitor: servidor del dashboard interactivo
 [Service]
 Type=simple
 EnvironmentFile=-__ENV_FILE__
-Environment=PATH=__PATH__
+Environment="PATH=__PATH__"
 ExecStart=__PYTHON__ __REPO_DIR__/server.py
 Restart=on-failure
 RestartSec=5

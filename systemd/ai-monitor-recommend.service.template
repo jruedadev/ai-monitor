@@ -4,6 +4,6 @@ Description=ai-monitor: motor de recomendaciones (corrida diaria)
 [Service]
 Type=oneshot
 EnvironmentFile=-__ENV_FILE__
-Environment=PATH=__PATH__
+Environment="PATH=__PATH__"
 WorkingDirectory=__REPO_DIR__
 ExecStart=__PYTHON__ -m recommend run --trigger diario

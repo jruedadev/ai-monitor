@@ -8,7 +8,13 @@ PYTHON_BIN="$(command -v python3)"
 UNITS_DIR="$HOME/.config/systemd/user"
 ENV_DIR="$HOME/.config/ai-monitor"
 ENV_FILE="$ENV_DIR/env"
-UNIT_PATH="$PATH"
+# PATH para Environment="PATH=..." de las unidades: se escapan \ y " (va entre
+# comillas, así un directorio con espacios no corta la asignación) y % (systemd
+# lo lee como especificador). Luego se escapa para el reemplazo de sed (\ & #).
+UNIT_PATH="${PATH//\\/\\\\}"
+UNIT_PATH="${UNIT_PATH//\"/\\\"}"
+UNIT_PATH="${UNIT_PATH//%/%%}"
+UNIT_PATH="$(printf '%s' "$UNIT_PATH" | sed -e 's/[\\&#]/\\&/g')"
 
 mkdir -p "$UNITS_DIR" "$ENV_DIR"
 

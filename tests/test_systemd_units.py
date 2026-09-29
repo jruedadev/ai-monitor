@@ -1,5 +1,8 @@
 import configparser
 import os
+import re
+import subprocess
+import tempfile
 import unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,7 +20,7 @@ class TestRecommendUnits(unittest.TestCase):
         service = unit("ai-monitor-recommend.service.template")["Service"]
         self.assertEqual(service["Type"], "oneshot")
         self.assertEqual(service["EnvironmentFile"], "-__ENV_FILE__")
-        self.assertEqual(service["Environment"], "PATH=__PATH__")
+        self.assertEqual(service["Environment"], '"PATH=__PATH__"')
         self.assertEqual(service["WorkingDirectory"], "__REPO_DIR__")
         self.assertEqual(service["ExecStart"], "__PYTHON__ -m recommend run --trigger diario")
 
@@ -29,7 +32,7 @@ class TestRecommendUnits(unittest.TestCase):
         self.assertEqual(timer["Install"]["WantedBy"], "timers.target")
 
     def test_server_gets_path_for_manual_runs(self):
-        self.assertEqual(unit("ai-monitor-server.service.template")["Service"]["Environment"], "PATH=__PATH__")
+        self.assertEqual(unit("ai-monitor-server.service.template")["Service"]["Environment"], '"PATH=__PATH__"')
 
     def test_install_substitutes_every_placeholder(self):
         with open(os.path.join(REPO, "install.sh")) as fh:
@@ -38,6 +41,21 @@ class TestRecommendUnits(unittest.TestCase):
             self.assertIn(f"s#{marker}#", script)
         self.assertIn("ai-monitor-recommend.service.template", script)
         self.assertIn("ai-monitor-recommend.timer", script)
+
+    def test_install_keeps_path_with_spaces_and_specials(self):
+        # Un directorio con espacios en el PATH (p. ej. "Code - OSS") cortaba la
+        # asignación sin comillas y la unidad perdía /usr/bin.
+        home = tempfile.mkdtemp()
+        odd = '/opt/Code - OSS/bin:/opt/a%b&c#d"e\\f'
+        env = {"HOME": home, "PATH": f"{odd}:{os.environ['PATH']}"}
+        subprocess.run(["bash", os.path.join(REPO, "install.sh")], input="n\n", text=True,
+                       env=env, check=True, capture_output=True)
+        with open(os.path.join(home, ".config/systemd/user/ai-monitor-recommend.service")) as fh:
+            [line] = [l for l in fh.read().splitlines() if l.startswith("Environment=")]
+        match = re.fullmatch(r'Environment="PATH=((?:[^"\\]|\\.)*)"', line)
+        self.assertIsNotNone(match, line)
+        value = re.sub(r"\\(.)", r"\1", match.group(1)).replace("%%", "%")
+        self.assertEqual(value, env["PATH"])
 
 
 if __name__ == "__main__":
