@@ -1,3 +1,4 @@
+import type { ClientRoot } from "@/lib/clients";
 import type { SourceKey } from "@/lib/sources";
 
 export interface ProjectUsage {
@@ -185,6 +186,39 @@ export function saveRoiSettings(settings: Partial<RoiSettings>): Promise<RoiSett
   });
 }
 
+export interface AppSettings {
+  client_roots: ClientRoot[];
+  onboarding_completed_at: string | null;
+  degraded: boolean;
+}
+
+export function fetchAppSettings(): Promise<AppSettings> {
+  return getJson("/api/app-settings");
+}
+
+export function saveAppSettings(settings: { client_roots: ClientRoot[] }): Promise<AppSettings> {
+  return getJson("/api/app-settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
+}
+
+export function completeOnboarding(): Promise<{ onboarding_completed_at: string }> {
+  return getJson("/api/app-settings/onboarding", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+}
+
+/** Mensaje del servidor en un 400 ("… → HTTP 400: <mensaje>"); null en cualquier otro caso. */
+export function errorDetail(err: unknown): string | null {
+  if (!(err instanceof HttpError) || err.status !== 400) return null;
+  const detail = err.message.split(": ").slice(1).join(": ");
+  return detail || null;
+}
+
 export type RecommendationKind = "skill" | "plugin" | "prompt" | "costo";
 export type RecommendationImpact = "alto" | "medio" | "bajo";
 export type RecommendationStatus = "nueva" | "aplicada" | "saltada" | "resuelta";
@@ -257,6 +291,15 @@ export interface EngineSettings {
   llm_chain: string[];
 }
 
+export interface AvailableBackends {
+  hermes: boolean;
+  claude: boolean;
+}
+
+export interface EngineSettingsResponse extends EngineSettings {
+  available: AvailableBackends;
+}
+
 const JSON_POST = { method: "POST", headers: { "Content-Type": "application/json" } } as const;
 
 export function fetchRecommendations(status: RecommendationStatus): Promise<RecommendationsResponse> {
@@ -271,7 +314,7 @@ export function runRecommendations(): Promise<{ run_id: number }> {
   return getJson("/api/recommendations/run", { ...JSON_POST, body: "{}" });
 }
 
-export function fetchEngineSettings(): Promise<EngineSettings> {
+export function fetchEngineSettings(): Promise<EngineSettingsResponse> {
   return getJson("/api/engine-settings");
 }
 

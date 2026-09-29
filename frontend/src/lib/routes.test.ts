@@ -7,6 +7,7 @@ import { SOURCE_KEYS } from "@/lib/sources";
 describe("parsePath", () => {
   it("vistas nuevas", () => {
     expect(parsePath("/")).toEqual({ view: "home", client: null });
+    expect(parsePath("/bienvenida")).toEqual({ view: "onboarding", client: null });
     expect(parsePath("/actividad")).toEqual({ view: "activity", client: null });
     expect(parsePath("/gasto")).toEqual({ view: "spend", client: null });
     expect(parsePath("/gasto/roi")).toEqual({ view: "roi", client: null });
@@ -17,6 +18,7 @@ describe("parsePath", () => {
   });
 
   it("rutas desconocidas o mal codificadas → null", () => {
+    expect(parsePath("/bienvenida/otra")).toBeNull();
     expect(parsePath("/gasto/otra")).toBeNull();
     expect(parsePath("/proyectos/a/b")).toBeNull();
     expect(parsePath("/claude-code")).toBeNull();

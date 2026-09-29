@@ -8,6 +8,7 @@
  *   /proyectos[/<cliente>]   → proyectos agrupados por cliente
  *   /recomendaciones         → recomendaciones del motor (?estado=aplicada|saltada|resuelta)
  *   /configuracion           → plan y estado de fuentes
+ *   /bienvenida              → configuración inicial (fuera del layout con sidebar)
  *   ?fuente=<slug>           → filtro global de fuente (ausente = todas, sin OpenRouter)
  *   ?comparar=YYYY-MM        → mes comparado en el Inicio
  *   ?dia=YYYY-MM-DD          → día seleccionado en la tendencia / sesiones
@@ -15,7 +16,7 @@
  */
 import type { SourceKey } from "@/lib/sources";
 
-export const VIEW_KEYS = ["home", "activity", "spend", "roi", "projects", "recommendations", "settings"] as const;
+export const VIEW_KEYS = ["home", "activity", "spend", "roi", "projects", "recommendations", "settings", "onboarding"] as const;
 export type ViewKey = (typeof VIEW_KEYS)[number];
 
 export const SOURCE_PARAM = "fuente";
@@ -32,6 +33,7 @@ const VIEW_PATH: Record<ViewKey, string> = {
   projects: "/proyectos",
   recommendations: "/recomendaciones",
   settings: "/configuracion",
+  onboarding: "/bienvenida",
 };
 
 const SOURCE_SLUG: Record<Exclude<SourceKey, "all">, string> = {
@@ -73,6 +75,7 @@ export function parsePath(pathname: string): DashboardLocation | null {
   if (head === "proyectos" && rest.length === 1) return { view: "projects", client: rest[0] };
   if (head === "recomendaciones" && rest.length === 0) return { view: "recommendations", client: null };
   if (head === "configuracion" && rest.length === 0) return { view: "settings", client: null };
+  if (head === "bienvenida" && rest.length === 0) return { view: "onboarding", client: null };
   return null;
 }
 

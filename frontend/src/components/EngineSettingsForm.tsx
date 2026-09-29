@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, Check, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { HttpError, fetchEngineSettings, saveEngineSettings, type EngineBackend } from "@/lib/api";
+import { errorDetail, fetchEngineSettings, saveEngineSettings, type EngineBackend } from "@/lib/api";
 import { BACKEND_OPTIONS, parseChain } from "@/lib/recommendations";
 
 interface Draft {
@@ -45,7 +45,7 @@ export function EngineSettingsForm() {
       setDraft({ backend: saved.backend, chain: saved.llm_chain.join("\n") });
       setSaveStatus("saved");
     } catch (err) {
-      setSaveError(err instanceof HttpError && err.status === 400 ? err.message.split(": ").slice(1).join(": ") : null);
+      setSaveError(errorDetail(err));
       setSaveStatus("error");
     }
   };
