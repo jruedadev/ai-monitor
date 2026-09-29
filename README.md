@@ -104,6 +104,30 @@ python3 server.py
 
 El puerto es configurable con `AI_MONITOR_PORT` (default `8420`). El servidor recolecta datos de las 4 fuentes cada 60 segundos y los empuja al navegador vía SSE — no hace falta recargar la página.
 
+### Configuración inicial
+
+La primera vez que abres el dashboard aparece `/bienvenida`, con tres pasos:
+
+1. **Carpetas de clientes**: cómo se agrupan tus proyectos. Cada raíz es un nombre de carpeta
+   (coincide en cualquier nivel, sin distinguir mayúsculas) o una ruta absoluta (coincide por
+   prefijo). Hay dos modos:
+   - *La carpeta siguiente es el cliente* (`cliente`): con la raíz `DEV`, `~/DEV/ACME/app` → cliente `ACME`.
+   - *Todo lo de dentro es un solo cliente* (`plano`): con la raíz `/srv/trabajo`, `/srv/trabajo/api` → cliente `trabajo`.
+
+   Gana la primera raíz que coincide; lo que no coincide con ninguna va a «Otros». Por defecto:
+   `DEV` en modo `cliente`.
+2. **Tu plan**: costo y fecha de inicio de las suscripciones. Solo se piden las fuentes con datos.
+3. **Motor de recomendaciones**: Hermes, `claude -p` o ninguno. Las opciones que no están en el
+   `PATH` del servidor aparecen deshabilitadas. Si no tienes ninguna, el motor funciona solo con
+   reglas locales.
+
+«Omitir» guarda los valores por defecto (raíces `DEV`, backend sugerido) y no vuelve a mostrar
+la pantalla. Para repetirla: Configuración → «Repetir configuración inicial». Los ajustes se
+guardan en la tabla `app_settings` de `history.db`.
+
+En un equipo sin Claude Code, Codex, OpenCode ni Hermes, el dashboard arranca vacío y el
+onboarding funciona igual: las fuentes aparecen «sin datos» y el motor queda en «Ninguno».
+
 ### Estructura del dashboard
 
 | Ruta | Qué responde |
