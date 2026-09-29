@@ -1,4 +1,3 @@
-// frontend/src/views/RecommendationsView.tsx
 import { useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { AlertCircle, Loader2, RotateCw, Sparkles } from "lucide-react";

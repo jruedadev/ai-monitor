@@ -12,6 +12,7 @@ describe("parsePath", () => {
     expect(parsePath("/gasto/roi")).toEqual({ view: "roi", client: null });
     expect(parsePath("/proyectos")).toEqual({ view: "projects", client: null });
     expect(parsePath("/proyectos/Mi%20Cliente")).toEqual({ view: "projects", client: "Mi Cliente" });
+    expect(parsePath("/recomendaciones")).toEqual({ view: "recommendations", client: null });
     expect(parsePath("/configuracion")).toEqual({ view: "settings", client: null });
   });
 
@@ -20,6 +21,7 @@ describe("parsePath", () => {
     expect(parsePath("/proyectos/a/b")).toBeNull();
     expect(parsePath("/claude-code")).toBeNull();
     expect(parsePath("/proyectos/%E0%A4%A")).toBeNull();
+    expect(parsePath("/recomendaciones/otra")).toBeNull();
   });
 
   it.each(VIEW_KEYS)("viewPath(%s) ida y vuelta", (view) => {

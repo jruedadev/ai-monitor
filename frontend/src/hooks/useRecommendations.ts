@@ -1,4 +1,3 @@
-// frontend/src/hooks/useRecommendations.ts
 import { useCallback, useEffect, useState } from "react";
 import { fetchRecommendations, type RecommendationStatus, type RecommendationsResponse } from "@/lib/api";
 

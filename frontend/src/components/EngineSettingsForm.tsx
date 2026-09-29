@@ -1,4 +1,3 @@
-// frontend/src/components/EngineSettingsForm.tsx
 import { useEffect, useState } from "react";
 import { AlertCircle, Check, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";

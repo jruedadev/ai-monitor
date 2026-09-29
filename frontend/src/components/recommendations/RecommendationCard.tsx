@@ -1,4 +1,3 @@
-// frontend/src/components/recommendations/RecommendationCard.tsx
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Check, Copy, Undo2 } from "lucide-react";
@@ -20,6 +19,7 @@ interface Props {
   onStatus: (status: UserStatus) => void;
 }
 
+/** Todo el texto viene del LLM o del usuario: se renderiza siempre como texto plano. */
 export function RecommendationCard({ rec, onStatus }: Props) {
   const { search } = useLocation();
   const [copied, setCopied] = useState(false);

@@ -1,4 +1,3 @@
-// frontend/src/lib/recommendations.test.ts
 import { describe, expect, it } from "vitest";
 import { HttpError, type PatternEvidence, type Recommendation, type RecommendationRun, type RecommendationsResponse } from "@/lib/api";
 import {

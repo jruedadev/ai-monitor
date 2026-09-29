@@ -1,4 +1,3 @@
-// frontend/src/lib/recommendations.ts
 /** Lógica pura de la vista Recomendaciones (testeable sin DOM). */
 import {
   HttpError, type CostEvidence, type EngineBackend, type Recommendation, type RecommendationImpact,
