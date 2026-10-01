@@ -6,6 +6,8 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 
 ## [Sin publicar]
 
+## [1.2.0] - 2026-10-01
+
 ### Añadido
 - `install.sh` ahora lo hace todo: compila el frontend si falta o está desactualizado, recarga systemd, activa los timers y el servidor (y lo reinicia para cargar la versión nueva). Nuevas opciones `-y`/`--yes` (instala el servidor sin preguntar) y `--sin-activar` (solo genera las unidades).
 
@@ -30,6 +32,7 @@ Primera versión estable.
 - Motor de recomendaciones: lectura y redacción local de prompts, clustering, LLM opcional (Hermes free o `claude -p`) con heurística de respaldo, señales de costo y timer diario de systemd.
 - Raíces de cliente configurables (modos `cliente` y `plano`) y onboarding en `/bienvenida`.
 
-[Sin publicar]: https://github.com/jruedadev/ai-monitor/compare/v1.1.0...HEAD
+[Sin publicar]: https://github.com/jruedadev/ai-monitor/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/jruedadev/ai-monitor/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/jruedadev/ai-monitor/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/jruedadev/ai-monitor/releases/tag/v1.0.0
