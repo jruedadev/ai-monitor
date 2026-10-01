@@ -146,6 +146,14 @@ El filtro de fuente es global (`?fuente=claude-code|codex|opencode|hermes|openro
 
 `server.py` (y también `main.py`, en cada ejecución) guarda un rollup diario por proyecto/modelo en `~/.local/share/ai-monitor/history.db` (SQLite). Si Claude Code, Codex, OpenCode o Hermes eventualmente rotan o truncan sesiones viejas, ese histórico local no se pierde — el gráfico de tendencia del dashboard interactivo (`GET /api/history`) lee de ahí, no de los datos en vivo.
 
+## Oficina
+
+La vista `/oficina` del dashboard muestra cada sesión de los últimos 30 minutos como un personaje pixel-art que
+trabaja, lee, ejecuta comandos o espera según lo que hace en ese momento. La actividad en vivo (herramienta en
+curso, esperando permiso) se detecta en Claude Code, OpenCode y Hermes; Codex solo muestra el estado básico
+(activo o en pausa) que sale de `/api/usage`. Nunca sale ningún texto de las sesiones: solo el nombre de la
+herramienta, su clase y marcas de tiempo. Los créditos del motor y de los gráficos están en [NOTICE](NOTICE).
+
 ## Motor de recomendaciones
 
 Cada día a las 07:00 (`ai-monitor-recommend.timer`) o con **Analizar ahora** en la vista Recomendaciones, ai-monitor lee tus prompts de los últimos 30 días (Claude Code, Codex, OpenCode y Hermes; OpenRouter no tiene prompts locales), los redacta (claves, correos, rutas e IPs), agrupa los que se repiten y propone una **skill**, un **plugin/MCP** o un **prompt reutilizable** para cada patrón, más recomendaciones de **costo** a partir de las señales del Inicio.
