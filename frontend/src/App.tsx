@@ -9,6 +9,7 @@ import { ProjectDetailSheet } from "@/components/ProjectDetailSheet";
 import { TopBar } from "@/components/TopBar";
 import { HomeView } from "@/components/home/HomeView";
 import { ActivityView } from "@/views/ActivityView";
+import { OfficeView } from "@/views/OfficeView";
 import { SpendView } from "@/views/SpendView";
 import { ProjectsView } from "@/views/ProjectsView";
 import { SettingsView } from "@/views/SettingsView";
@@ -23,7 +24,7 @@ export default function App() {
   const roots = useClientRoots();
   const appSettings = useAppSettings();
   const { pathname } = useLocation();
-  const { sources, combined, connected, recommendationsVersion } = useUsageStream();
+  const { sources, combined, activity, connected, recommendationsVersion } = useUsageStream();
   const [localVersion, bumpRecommendations] = useReducer((n: number) => n + 1, 0);
   const recommendationsKey = `${recommendationsVersion}:${localVersion}`;
   const newRecommendations = useNewRecommendationsCount(recommendationsKey);
@@ -61,6 +62,7 @@ export default function App() {
               onSelectProject={route.setSelectedProject}
             />
           )}
+          {route.view === "office" && <OfficeView sources={sources} activity={activity} onSelectProject={route.setSelectedProject} />}
           {(route.view === "spend" || route.view === "roi") && (
             <SpendView
               tab={route.view}

@@ -15,6 +15,8 @@ describe("parsePath", () => {
     expect(parsePath("/proyectos/Mi%20Cliente")).toEqual({ view: "projects", client: "Mi Cliente" });
     expect(parsePath("/recomendaciones")).toEqual({ view: "recommendations", client: null });
     expect(parsePath("/configuracion")).toEqual({ view: "settings", client: null });
+    expect(parsePath("/oficina")).toEqual({ view: "office", client: null });
+    expect(viewPath("office")).toBe("/oficina");
   });
 
   it("rutas desconocidas o mal codificadas → null", () => {

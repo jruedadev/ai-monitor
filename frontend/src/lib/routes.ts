@@ -4,6 +4,7 @@
  *
  *   /                        → Inicio (briefing)
  *   /actividad               → tendencia + sesiones del día
+ *   /oficina                 → oficina pixel-art con las sesiones recientes
  *   /gasto, /gasto/roi       → Gasto y ROI
  *   /proyectos[/<cliente>]   → proyectos agrupados por cliente
  *   /recomendaciones         → recomendaciones del motor (?estado=aplicada|saltada|resuelta)
@@ -16,7 +17,7 @@
  */
 import type { SourceKey } from "@/lib/sources";
 
-export const VIEW_KEYS = ["home", "activity", "spend", "roi", "projects", "recommendations", "settings", "onboarding"] as const;
+export const VIEW_KEYS = ["home", "activity", "spend", "roi", "projects", "recommendations", "settings", "onboarding", "office"] as const;
 export type ViewKey = (typeof VIEW_KEYS)[number];
 
 export const SOURCE_PARAM = "fuente";
@@ -34,6 +35,7 @@ const VIEW_PATH: Record<ViewKey, string> = {
   recommendations: "/recomendaciones",
   settings: "/configuracion",
   onboarding: "/bienvenida",
+  office: "/oficina",
 };
 
 const SOURCE_SLUG: Record<Exclude<SourceKey, "all">, string> = {
@@ -76,6 +78,7 @@ export function parsePath(pathname: string): DashboardLocation | null {
   if (head === "recomendaciones" && rest.length === 0) return { view: "recommendations", client: null };
   if (head === "configuracion" && rest.length === 0) return { view: "settings", client: null };
   if (head === "bienvenida" && rest.length === 0) return { view: "onboarding", client: null };
+  if (head === "oficina" && rest.length === 0) return { view: "office", client: null };
   return null;
 }
 
