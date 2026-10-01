@@ -175,5 +175,100 @@ class TestServerAPI(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 400)
 
 
+class TestActivityEndpoint(unittest.TestCase):
+    def build(self, fn, interval=0.05):
+        static_dir = tempfile.mkdtemp()
+        with open(os.path.join(static_dir, "index.html"), "w") as f:
+            f.write("<html></html>")
+        patcher = patch("server.main.collect_all", return_value={
+            "claude_code": {}, "codex": {}, "opencode": {}, "hermes": {},
+            "openrouter": {"unavailable": True, "reason": "x"}})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        db_fd, db_path = tempfile.mkstemp(suffix=".db")
+        os.close(db_fd)
+        os.unlink(db_path)
+        httpd = server.build_app(static_dir, poll_interval_seconds=3600, db_path=db_path,
+                                 activity_interval_seconds=interval, activity_fn=fn)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        self.addCleanup(httpd.server_close)
+        self.addCleanup(httpd.shutdown)
+        return httpd.server_address[1]
+
+    def snap(self, state="thinking", source_status="ok", generated="2026-10-01T05:30:00Z"):
+        return {"generated_at": generated,
+                "agents": [{"key": "claude_code:a", "source": "claude_code", "project": "/p", "state": state,
+                            "tool": None, "tool_kind": None, "since": "2026-10-01T05:29:58Z"}],
+                "sources": {"claude_code": source_status, "opencode": "ok", "hermes": "ok"}}
+
+    def get(self, port, path):
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5) as resp:
+            return resp.status, resp.headers.get("Content-Type"), resp.read()
+
+    def test_get_activity_returns_the_stored_snapshot(self):
+        port = self.build(lambda: self.snap())
+        status, ctype, body = self.get(port, "/api/activity")
+        self.assertEqual(status, 200)
+        self.assertEqual(ctype, "application/json")
+        self.assertEqual(json.loads(body), self.snap())
+
+    def test_get_activity_does_not_run_readers_in_the_request_thread(self):
+        calls = []
+
+        def fn():
+            calls.append(threading.current_thread().name)
+            return self.snap()
+        port = self.build(fn, interval=3600)
+        self.get(port, "/api/activity")
+        self.get(port, "/api/activity")
+        self.assertEqual(len(calls), 1)  # solo el cálculo inicial de build_app
+
+    def read_sse_events(self, port, wanted, timeout=3):
+        import socket
+        sock = socket.create_connection(("127.0.0.1", port), timeout=timeout)
+        sock.sendall(b"GET /api/stream HTTP/1.1\r\nHost: x\r\n\r\n")
+        buf, deadline = b"", time.time() + timeout
+        try:
+            while time.time() < deadline and buf.count(b"event: " + wanted) < 3:
+                try:
+                    buf += sock.recv(65536)
+                except socket.timeout:
+                    break
+        finally:
+            sock.close()
+        return buf.count(b"event: " + wanted)
+
+    def test_loop_publishes_only_when_agents_or_sources_change(self):
+        counter = {"n": 0}
+
+        def fn():
+            counter["n"] += 1
+            return self.snap(generated=f"2026-10-01T05:30:{counter['n'] % 60:02d}Z")  # solo cambia generated_at
+        port = self.build(fn, interval=0.05)
+        # Solo el evento inicial al conectar: ningún ciclo posterior publica si agents/sources no cambian.
+        self.assertEqual(self.read_sse_events(port, b"activity", timeout=1), 1)
+
+    def test_loop_publishes_when_state_changes(self):
+        states = iter(["thinking", "tool", "thinking", "tool"] * 100)
+        port = self.build(lambda: self.snap(state=next(states)), interval=0.05)
+        self.assertGreaterEqual(self.read_sse_events(port, b"activity", timeout=3), 3)
+
+    def test_loop_survives_a_failing_reader(self):
+        calls = {"n": 0}
+
+        def fn():
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise RuntimeError("falla puntual")
+            return self.snap(state="thinking" if calls["n"] < 3 else "tool")
+        port = self.build(fn, interval=0.05)
+        deadline = time.time() + 3
+        while time.time() < deadline and calls["n"] < 4:
+            time.sleep(0.05)
+        self.assertGreaterEqual(calls["n"], 4)
+        _, _, body = self.get(port, "/api/activity")
+        self.assertEqual(json.loads(body)["agents"][0]["state"], "tool")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,9 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 
 ## [Sin publicar]
 
+### Añadido
+- Actividad en vivo de Claude Code, OpenCode y Hermes: nuevo endpoint `GET /api/activity` y evento `activity` en `/api/stream` (estado por sesión: pensando, usando una herramienta, esperando o en pausa; sin textos ni argumentos).
+
 ### Corregido
 - Las fechas de las sesiones de OpenCode: la última actividad es la real (antes mostraba el inicio de la sesión) y las duraciones se calculan bien.
 

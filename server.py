@@ -17,6 +17,7 @@ import briefing
 import clients
 import history
 import main
+from live import activity as live_activity
 from recommend import engine as rec_engine
 from recommend import settings as rec_settings
 from recommend import store as rec_store
@@ -24,6 +25,8 @@ from sse import SSEBroker, format_sse_event
 
 _state_lock = threading.Lock()
 _state = {"sources": {}, "combined": {}}
+_activity_lock = threading.Lock()
+_activity = {"snapshot": None, "published": None}
 
 AVAILABLE_BACKENDS = ("hermes", "claude")
 
@@ -63,6 +66,36 @@ def _background_loop(broker, poll_interval_seconds, db_path=None, last_run_id=No
         except Exception:
             pass
         last_run_id = _check_recommendation_runs(broker, db_path, last_run_id)
+
+
+def _empty_activity():
+    return {"generated_at": None, "agents": [], "sources": {s: "unavailable" for s in live_activity.LIVE_SOURCES}}
+
+
+def _activity_tick(broker, fn):
+    """Un ciclo: calcula el snapshot, lo guarda y publica solo si agents/sources cambiaron."""
+    try:
+        snap = fn()
+    except Exception:
+        return
+    key = json.dumps({"agents": snap["agents"], "sources": snap["sources"]}, sort_keys=True)
+    with _activity_lock:
+        _activity["snapshot"] = snap
+        changed = _activity["published"] != key
+        _activity["published"] = key
+    if changed:
+        broker.publish("activity", json.dumps(snap))
+
+
+def _activity_loop(broker, interval, fn):
+    while True:
+        time.sleep(interval)
+        _activity_tick(broker, fn)
+
+
+def _current_activity_json():
+    with _activity_lock:
+        return json.dumps(_activity["snapshot"] or _empty_activity())
 
 
 def _current_snapshot_json():
@@ -153,6 +186,8 @@ def make_handler(static_dir, broker, db_path=None, engine_opts=None):
                     data = {"backend": rec_settings.DEFAULT_BACKEND, "llm_chain": list(rec_settings.DEFAULT_CHAIN)}
                 data["available"] = _available_backends()
                 self._send_json(json.dumps(data))
+            elif parsed.path == "/api/activity":
+                self._send_json(_current_activity_json())
             elif parsed.path == "/api/stream":
                 self._handle_sse()
             else:
@@ -273,6 +308,7 @@ def make_handler(static_dir, broker, db_path=None, engine_opts=None):
             q = broker.subscribe()
             try:
                 self.wfile.write(format_sse_event("usage", _current_snapshot_json()))
+                self.wfile.write(format_sse_event("activity", _current_activity_json()))
                 self.wfile.flush()
                 while True:
                     payload = q.get()
@@ -317,7 +353,8 @@ def make_handler(static_dir, broker, db_path=None, engine_opts=None):
     return Handler
 
 
-def build_app(static_dir, poll_interval_seconds=60, port=0, db_path=None, engine_opts=None):
+def build_app(static_dir, poll_interval_seconds=60, port=0, db_path=None, engine_opts=None,
+              activity_interval_seconds=2, activity_fn=None):
     static_dir = os.path.abspath(static_dir)
     broker = SSEBroker()
     handler_cls = make_handler(static_dir, broker, db_path=db_path, engine_opts=engine_opts)
@@ -330,6 +367,12 @@ def build_app(static_dir, poll_interval_seconds=60, port=0, db_path=None, engine
         target=_background_loop, args=(broker, poll_interval_seconds, db_path, last_run_id), daemon=True
     )
     thread.start()
+
+    fn = activity_fn or live_activity.snapshot
+    with _activity_lock:
+        _activity["snapshot"], _activity["published"] = None, None
+    _activity_tick(broker, fn)  # primer snapshot antes de aceptar peticiones
+    threading.Thread(target=_activity_loop, args=(broker, activity_interval_seconds, fn), daemon=True).start()
 
     return httpd
 
