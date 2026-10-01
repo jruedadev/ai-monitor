@@ -6,6 +6,8 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 
 ## [Sin publicar]
 
+## [1.1.0] - 2026-10-01
+
 ### Añadido
 - Vista Oficina (`/oficina`): cada sesión reciente es un personaje pixel-art que se sienta a trabajar, lee, ejecuta comandos o espera según lo que hace en ese momento.
 - Actividad en vivo de Claude Code, OpenCode y Hermes: nuevo endpoint `GET /api/activity` y evento `activity` en `/api/stream` (estado por sesión: pensando, usando una herramienta, esperando o en pausa; sin textos ni argumentos).
@@ -25,5 +27,6 @@ Primera versión estable.
 - Motor de recomendaciones: lectura y redacción local de prompts, clustering, LLM opcional (Hermes free o `claude -p`) con heurística de respaldo, señales de costo y timer diario de systemd.
 - Raíces de cliente configurables (modos `cliente` y `plano`) y onboarding en `/bienvenida`.
 
-[Sin publicar]: https://github.com/jruedadev/ai-monitor/compare/v1.0.0...HEAD
+[Sin publicar]: https://github.com/jruedadev/ai-monitor/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/jruedadev/ai-monitor/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/jruedadev/ai-monitor/releases/tag/v1.0.0
