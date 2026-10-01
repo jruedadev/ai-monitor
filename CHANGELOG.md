@@ -7,6 +7,7 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 ## [Sin publicar]
 
 ### Añadido
+- Vista Oficina (`/oficina`): cada sesión reciente es un personaje pixel-art que se sienta a trabajar, lee, ejecuta comandos o espera según lo que hace en ese momento.
 - Actividad en vivo de Claude Code, OpenCode y Hermes: nuevo endpoint `GET /api/activity` y evento `activity` en `/api/stream` (estado por sesión: pensando, usando una herramienta, esperando o en pausa; sin textos ni argumentos).
 
 ### Corregido
