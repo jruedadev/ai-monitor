@@ -29,10 +29,14 @@ export function collectSessions(
   return rows;
 }
 
-/** claude_code usa timestamps ISO (string); codex usa epoch en segundos (number). */
-function toEpochMs(ts: string | number | null): number | null {
+/**
+ * claude_code usa ISO (string), codex y hermes epoch en segundos y opencode epoch en ms.
+ * Un número > 1e12 ya está en ms (1e12 s sería el año 33658).
+ */
+export function toEpochMs(ts: string | number | null): number | null {
   if (ts === null) return null;
-  return typeof ts === "number" ? ts * 1000 : new Date(ts).getTime();
+  const ms = typeof ts === "number" ? (ts > 1e12 ? ts : ts * 1000) : Date.parse(ts);
+  return Number.isNaN(ms) ? null : ms;
 }
 
 export function sessionDurationSeconds(session: Pick<SessionDetailEntry, "first_ts" | "last_ts">): number {
