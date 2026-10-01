@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Activity, FolderKanban, Home, Lightbulb, Settings, Wallet } from "lucide-react";
+import { Activity, Building2, FolderKanban, Home, Lightbulb, Settings, Wallet } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu,
   SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, useSidebar,
@@ -13,6 +13,7 @@ const ACTIVE = "data-active:shadow-[inset_2px_0_0_var(--primary)]";
 const NAV: { views: ViewKey[]; to: ViewKey; label: string; icon: typeof Home }[] = [
   { views: ["home"], to: "home", label: "Inicio", icon: Home },
   { views: ["activity"], to: "activity", label: "Actividad", icon: Activity },
+  { views: ["office"], to: "office", label: "Oficina", icon: Building2 },
   { views: ["spend", "roi"], to: "spend", label: "Gasto y ROI", icon: Wallet },
   { views: ["projects"], to: "projects", label: "Proyectos", icon: FolderKanban },
   { views: ["recommendations"], to: "recommendations", label: "Recomendaciones", icon: Lightbulb },
