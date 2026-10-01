@@ -55,9 +55,7 @@ source ~/.bashrc
 # 3. Instala: copia la key al .env (chmod 600) y genera las unidades systemd
 ./install.sh
 
-# 4. Activa el timer
-systemctl --user daemon-reload
-systemctl --user enable --now ai-monitor.timer
+# (install.sh ya hace daemon-reload y activa los timers; con --sin-activar solo genera las unidades)
 systemctl --user enable --now ai-monitor-recommend.timer
 ```
 
@@ -82,7 +80,7 @@ Resultado: la terminal interactiva lee la key de `~/.bashrc`; el timer de system
    ./install.sh
    ```
 
-   Detecta automáticamente dónde quedó el repo y genera una unidad `systemd --user` que regenera el HTML cada 15 minutos. El script imprime el comando final (`systemctl --user enable --now ai-monitor.timer`) sin ejecutarlo — lo corres tú cuando quieras activarlo.
+   Detecta automáticamente dónde quedó el repo, genera las unidades `systemd --user` (regeneración del HTML cada 15 minutos y motor de recomendaciones a las 07:00) y las activa (`daemon-reload` + `enable --now`). Opciones: `-y`/`--yes` instala también el servidor sin preguntar y `--sin-activar` solo genera las unidades, sin tocar `systemctl`.
 
 ## Dashboard interactivo (opcional)
 
@@ -140,7 +138,7 @@ onboarding funciona igual: las fuentes aparecen «sin datos» y el motor queda e
 
 El filtro de fuente es global (`?fuente=claude-code|codex|opencode|hermes|openrouter`) y se conserva al navegar; ⌘K / Ctrl+K busca vistas, clientes, proyectos y sesiones. Las rutas antiguas (`/claude-code`, `/roi`, `/cliente/<X>`…) redirigen a las nuevas.
 
-**Como servicio de systemd**: `./install.sh` pregunta si quieres instalar también `ai-monitor-server.service` (servicio de larga duración, separado del `ai-monitor.timer` existente que solo regenera el HTML estático). Si aceptas y falta `frontend/dist`, el script lo compila automáticamente (con `npm install --legacy-peer-deps && npm run build`) siempre que haya `npm` disponible; si no hay `npm` o la compilación falla, solo muestra una advertencia con el comando manual.
+**Como servicio de systemd**: `./install.sh` pregunta si quieres instalar también `ai-monitor-server.service` (servicio de larga duración, separado del `ai-monitor.timer` existente que solo regenera el HTML estático); si aceptas, lo activa y lo reinicia para cargar la versión actual. Si falta `frontend/dist` o está desactualizado respecto a `frontend/src`, el script lo compila automáticamente (con `npm install --legacy-peer-deps && npm run build`) siempre que haya `npm` disponible; si no hay `npm` o la compilación falla, solo muestra una advertencia con el comando manual.
 
 ### Histórico más allá de la retención de cada proveedor
 

@@ -6,6 +6,9 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 
 ## [Sin publicar]
 
+### Añadido
+- `install.sh` ahora lo hace todo: compila el frontend si falta o está desactualizado, recarga systemd, activa los timers y el servidor (y lo reinicia para cargar la versión nueva). Nuevas opciones `-y`/`--yes` (instala el servidor sin preguntar) y `--sin-activar` (solo genera las unidades).
+
 ## [1.1.0] - 2026-10-01
 
 ### Añadido

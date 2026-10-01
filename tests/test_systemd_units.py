@@ -48,7 +48,7 @@ class TestRecommendUnits(unittest.TestCase):
         home = tempfile.mkdtemp()
         odd = '/opt/Code - OSS/bin:/opt/a%b&c#d"e\\f'
         env = {"HOME": home, "PATH": f"{odd}:{os.environ['PATH']}"}
-        subprocess.run(["bash", os.path.join(REPO, "install.sh")], input="n\n", text=True,
+        subprocess.run(["bash", os.path.join(REPO, "install.sh"), "--sin-activar"], input="n\n", text=True,
                        env=env, check=True, capture_output=True)
         with open(os.path.join(home, ".config/systemd/user/ai-monitor-recommend.service")) as fh:
             [line] = [l for l in fh.read().splitlines() if l.startswith("Environment=")]

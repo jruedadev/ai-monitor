@@ -1,7 +1,24 @@
 #!/usr/bin/env bash
-# Genera la unidad systemd --user de ai-monitor con la ruta real del repo,
-# sin hardcodear ninguna ruta de usuario en el código versionado.
+# Instala ai-monitor como servicios systemd --user con la ruta real del repo,
+# sin hardcodear ninguna ruta de usuario en el código versionado: genera las
+# unidades, compila el frontend si hace falta y activa timers y servidor.
+#
+#   ./install.sh                 pregunta si instalar el servidor; activa todo
+#   ./install.sh -y|--yes        instala y activa también el servidor, sin preguntar
+#   ./install.sh --sin-activar   solo genera las unidades; no toca systemctl
 set -euo pipefail
+
+ASSUME_YES=0
+ACTIVATE=1
+for arg in "$@"; do
+  case "$arg" in
+    -y|--yes) ASSUME_YES=1 ;;
+    --sin-activar) ACTIVATE=0 ;;
+    -h|--help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "Opción desconocida: $arg (usa --help)" >&2; exit 2 ;;
+  esac
+done
+INSTALL_SERVER=0
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 PYTHON_BIN="$(command -v python3)"
@@ -38,13 +55,21 @@ fi
 chmod 600 "$ENV_FILE"
 
 echo ""
-read -r -p "¿Instalar también el servicio del dashboard interactivo (server.py)? [y/N] " REPLY
+if [ "$ASSUME_YES" -eq 1 ]; then
+  REPLY=y
+else
+  read -r -p "¿Instalar también el servicio del dashboard interactivo (server.py)? [y/N] " REPLY || REPLY=""
+fi
 if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-  if [ ! -d "$REPO_DIR/frontend/dist" ]; then
+  INSTALL_SERVER=1
+  # Compila si no hay dist o si el código fuente es más nuevo que el build
+  # (p. ej. tras actualizar el repo con una vista nueva).
+  DIST_INDEX="$REPO_DIR/frontend/dist/index.html"
+  if [ ! -f "$DIST_INDEX" ] || [ -n "$(find "$REPO_DIR/frontend/src" "$REPO_DIR/frontend/package.json" -newer "$DIST_INDEX" -print -quit 2>/dev/null)" ]; then
     if command -v npm >/dev/null 2>&1; then
       echo ""
-      echo "No se encontró $REPO_DIR/frontend/dist — compilando el frontend..."
-      if (cd "$REPO_DIR/frontend" && npm install --legacy-peer-deps && npm run build); then
+      echo "Frontend sin compilar o desactualizado — compilando $REPO_DIR/frontend/dist..."
+      if (cd "$REPO_DIR/frontend" && { [ -d node_modules ] || npm install --legacy-peer-deps; } && npm run build); then
         echo "Frontend compilado en $REPO_DIR/frontend/dist"
       else
         echo ""
@@ -70,9 +95,6 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
     "$REPO_DIR/systemd/ai-monitor-server.service.template" > "$UNITS_DIR/ai-monitor-server.service"
 
   echo "Unidad ai-monitor-server.service instalada en $UNITS_DIR"
-  echo "Para activarla:"
-  echo "  systemctl --user daemon-reload"
-  echo "  systemctl --user enable --now ai-monitor-server.service"
 fi
 
 sed \
@@ -85,8 +107,22 @@ sed \
 cp "$REPO_DIR/systemd/ai-monitor-recommend.timer" "$UNITS_DIR/ai-monitor-recommend.timer"
 
 echo "Unidades instaladas en $UNITS_DIR"
-echo ""
-echo "Para activarlas, corre:"
-echo "  systemctl --user daemon-reload"
-echo "  systemctl --user enable --now ai-monitor.timer"
-echo "  systemctl --user enable --now ai-monitor-recommend.timer   # motor de recomendaciones, 07:00"
+
+UNITS=(ai-monitor.timer ai-monitor-recommend.timer)
+[ "$INSTALL_SERVER" -eq 1 ] && UNITS+=(ai-monitor-server.service)
+
+if [ "$ACTIVATE" -eq 1 ] && command -v systemctl >/dev/null 2>&1; then
+  systemctl --user daemon-reload
+  systemctl --user enable --now "${UNITS[@]}"
+  # Si el servidor ya corría, que cargue el código y la unidad nuevos.
+  if [ "$INSTALL_SERVER" -eq 1 ]; then
+    systemctl --user restart ai-monitor-server.service
+  fi
+  echo "Activado: ${UNITS[*]}"
+  [ "$INSTALL_SERVER" -eq 1 ] && echo "Dashboard: http://localhost:${AI_MONITOR_PORT:-8420}"
+else
+  echo ""
+  echo "Para activarlas, corre:"
+  echo "  systemctl --user daemon-reload"
+  echo "  systemctl --user enable --now ${UNITS[*]}"
+fi
