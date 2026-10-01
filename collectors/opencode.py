@@ -20,7 +20,7 @@ def collect(db_path=None):
         cur = con.cursor()
         cur.execute(
             "SELECT id, directory, model, title, cost, tokens_input, tokens_output, "
-            "tokens_cache_read, tokens_cache_write, time_created FROM session"
+            "tokens_cache_read, tokens_cache_write, time_created, time_updated FROM session"
         )
         rows = cur.fetchall()
         con.close()
@@ -59,12 +59,14 @@ def collect(db_path=None):
                 p["by_day"][day]["tokens"] += inp + out + cr + cw
                 p["by_day"][day]["cost"] += cost
 
+            time_updated = row["time_updated"]
             p["sessions_detail"].append({
                 "session_id": row["id"],
                 "tokens": inp + out + cr + cw,
                 "cost": round(cost, 4),
                 "title": row["title"],
-                "last_ts": row["time_created"],
+                "first_ts": time_created,
+                "last_ts": time_updated if time_updated is not None else time_created,
                 "cwd": directory,
                 "date": day,
             })

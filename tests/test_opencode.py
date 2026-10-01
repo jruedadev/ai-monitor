@@ -11,7 +11,7 @@ CREATE TABLE session (
     id TEXT, directory TEXT, model TEXT, title TEXT, cost REAL,
     tokens_input INTEGER, tokens_output INTEGER,
     tokens_cache_read INTEGER, tokens_cache_write INTEGER,
-    time_created INTEGER
+    time_created INTEGER, time_updated INTEGER
 );
 """
 
@@ -24,10 +24,10 @@ class TestOpenCodeCollector(unittest.TestCase):
         con.execute(SCHEMA)
         con.execute(
             "INSERT INTO session (id, directory, model, title, cost, tokens_input, "
-            "tokens_output, tokens_cache_read, tokens_cache_write, time_created) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "tokens_output, tokens_cache_read, tokens_cache_write, time_created, time_updated) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             ("s1", "/home/user/DEV/demo", '{"id":"gpt-5.5","providerID":"openai"}',
-             "Sesión demo", 0.22, 1000, 200, 500, 100, 1777996210131),
+             "Sesión demo", 0.22, 1000, 200, 500, 100, 1777996210131, 1777996310131),
         )
         con.commit()
         con.close()
@@ -72,6 +72,28 @@ class TestOpenCodeCollector(unittest.TestCase):
         # both on same day, so total should be 2150 tokens and 0.32 cost
         self.assertEqual(by_day["2026-05-05"]["tokens"], 2150)
         self.assertAlmostEqual(by_day["2026-05-05"]["cost"], 0.32, places=2)
+
+    def test_last_ts_is_time_updated_and_first_ts_is_time_created(self):
+        data = opencode.collect(db_path=self.tmp.name)
+        detail = data["/home/user/DEV/demo"]["sessions_detail"][0]
+        self.assertEqual(detail["first_ts"], 1777996210131)
+        self.assertEqual(detail["last_ts"], 1777996310131)
+
+    def test_last_ts_falls_back_to_time_created_when_time_updated_is_null(self):
+        con = sqlite3.connect(self.tmp.name)
+        con.execute("UPDATE session SET time_updated = NULL WHERE id = 's1'")
+        con.commit()
+        con.close()
+        detail = opencode.collect(db_path=self.tmp.name)["/home/user/DEV/demo"]["sessions_detail"][0]
+        self.assertEqual(detail["last_ts"], 1777996210131)
+
+    def test_by_day_still_uses_time_created(self):
+        con = sqlite3.connect(self.tmp.name)
+        con.execute("UPDATE session SET time_updated = time_created + 5 * 86400000 WHERE id = 's1'")
+        con.commit()
+        con.close()
+        by_day = opencode.collect(db_path=self.tmp.name)["/home/user/DEV/demo"]["by_day"]
+        self.assertEqual(list(by_day), ["2026-05-05"])
 
 
 if __name__ == "__main__":

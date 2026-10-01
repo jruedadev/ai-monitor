@@ -6,6 +6,9 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 
 ## [Sin publicar]
 
+### Corregido
+- Las fechas de las sesiones de OpenCode: la última actividad es la real (antes mostraba el inicio de la sesión) y las duraciones se calculan bien.
+
 ## [1.0.0] - 2026-09-29
 
 Primera versión estable.
