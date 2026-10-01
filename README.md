@@ -206,3 +206,7 @@ Cada collector expone `collect(...)` con un parámetro opcional para inyectar la
 ```bash
 python3 -m unittest discover -s tests -v
 ```
+
+## Versiones
+
+El proyecto usa [Semantic Versioning](https://semver.org/lang/es/). La versión actual está en `VERSION`, los cambios de cada versión en [`CHANGELOG.md`](CHANGELOG.md) y las versiones publicadas en [Releases](https://github.com/jruedadev/ai-monitor/releases). La política de versionado está en [`AGENTS.md`](AGENTS.md).

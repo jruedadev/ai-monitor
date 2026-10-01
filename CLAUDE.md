@@ -18,6 +18,20 @@ python3 -m unittest discover -s tests -v   # run the test suite
 
 No build step, no external dependencies (stdlib only — `sqlite3`, `json`, `urllib.request`, `argparse`, `unittest`).
 
+## Versionado, specs y planes
+
+El repo sigue Semantic Versioning. La política completa (qué es API pública, cómo se elige
+MAJOR/MINOR/PATCH, changelog, cómo publicar) y las directivas para specs y planes están en
+`AGENTS.md`, que se importa aquí:
+
+@AGENTS.md
+
+Resumen operativo:
+- `VERSION` es la fuente única; `frontend/package.json` y `CHANGELOG.md` van en sincronía (`tests/test_version.py` lo verifica).
+- Cada spec declara `Versión objetivo: X.Y.Z (MAJOR | MINOR | PATCH)` y una sección "Impacto de versión"; cada plan copia la versión en su cabecera y termina con la tarea "Release vX.Y.Z".
+- Los commits `feat`/`fix`/`perf` añaden su línea a `## [Sin publicar]` del changelog.
+- Tag, push y release en GitHub solo con permiso explícito del usuario.
+
 ## Architecture
 
 Each data source is an isolated collector module under `collectors/`, all sharing one contract:
