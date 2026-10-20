@@ -14,7 +14,10 @@ python3 main.py --json              # all raw per-source data + combined view, a
 python3 main.py --html out.html     # tabbed self-contained HTML dashboard
 python3 main.py --briefing          # briefing del mes: KPIs vs mes comparable y señales de atención
 python3 -m unittest discover -s tests -v   # run the test suite
+python3 scripts/graphify_postprocess.py --report --html   # tras cada /graphify: quita falsos positivos de calls y regenera informe y HTML
 ```
+
+El extractor de graphify mete aristas `calls` espurias (módulos de la stdlib tratados como funciones, autoaristas). `scripts/graphify_postprocess.py` las quita y es idempotente. Tras cada `/graphify` o `/graphify --update` ejecútalo a mano, o deja que lo haga el hook de post-commit. El hook de post-commit lo instala `graphify hook install` en `.git/hooks/` de cada clon (no está versionado); tras el rebuild en segundo plano, ejecuta la limpieza y guarda su salida en `~/.cache/ai-monitor-graphify-postprocess.log`.
 
 No build step, no external dependencies (stdlib only — `sqlite3`, `json`, `urllib.request`, `argparse`, `unittest`).
 
