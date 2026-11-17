@@ -48,7 +48,11 @@ class TestSettings(StoreTestCase):
         self.assertEqual(ok, {"backend": "hermes", "llm_chain": ["nous:stealth/x"]})
         claude = engine_settings.validate_engine_settings({"backend": "claude", "llm_chain": ["nous:pago/m"]})
         self.assertEqual(claude["backend"], "claude")
+        paid = engine_settings.validate_engine_settings(
+            {"backend": "hermes", "llm_chain": ["openrouter:anthropic/claude-haiku-5.5"]})
+        self.assertEqual(paid, {"backend": "hermes", "llm_chain": ["openrouter:anthropic/claude-haiku-5.5"]})
         for bad in ({"backend": "otro", "llm_chain": ["nous:stealth/x"]},
+                    {"backend": "hermes", "llm_chain": ["azure:x/gpt-5"]},
                     {"backend": "hermes", "llm_chain": []},
                     {"backend": "hermes", "llm_chain": "nous:stealth/x"},
                     {"backend": "hermes", "llm_chain": ["nous:pago/modelo"]},

@@ -173,6 +173,22 @@ class TestRunLlm(unittest.TestCase):
         self.assertEqual(len(runner.calls), 1)
         self.assertIn("free", result["errors"][0])
 
+    def test_openrouter_paid_model_under_cap_is_accepted(self):
+        runner = FakeRunner(("raw", json.dumps(GOOD), {"total_tokens": 5, "estimated_cost_usd": 0.003}))
+        result = self.run_chain(runner, chain=["openrouter:anthropic/claude-haiku-5.5"])
+        self.assertEqual((result["ok"], result["model"], result["llm_cost"]),
+                         (True, "openrouter:anthropic/claude-haiku-5.5", 0.003))
+        args = runner.calls[0]
+        self.assertEqual(args[3:9], ["--provider", "openrouter", "-m", "anthropic/claude-haiku-5.5",
+                                     "--ignore-rules", "--safe-mode"])
+
+    def test_openrouter_cost_over_cap_is_discarded(self):
+        runner = FakeRunner(("raw", json.dumps(GOOD), {"total_tokens": 5, "estimated_cost_usd": 0.2}),
+                            GOOD)
+        result = self.run_chain(runner, chain=["openrouter:deepseek/deepseek-v4-pro", CHAIN[0]])
+        self.assertEqual((result["ok"], result["model"], result["attempts"]), (True, CHAIN[0], 2))
+        self.assertIn("tope", result["errors"][0])
+
     def test_claude_backend_single_attempt(self):
         envelope = {"type": "result", "is_error": False, "result": "```json\n" + json.dumps(GOOD) + "\n```",
                     "total_cost_usd": 0.12,

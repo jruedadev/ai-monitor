@@ -121,10 +121,10 @@ class TestRun(EngineTestCase):
         run = store.get_run(self.db, run_id)
         self.assertEqual((run["status"], run["model"], run["attempts"], run["prompts"], run["clusters"],
                           run["created"], run["llm_tokens"]),
-                         ("ok", "nous:stealth/space-bunny-alpha", 1, 4, 1, 1, 1234))
+                         ("ok", "openrouter:anthropic/claude-haiku-5.5", 1, 4, 1, 1, 1234))
         [rec] = store.list_recommendations(self.db)
         self.assertEqual((rec["kind"], rec["tool"], rec["tokens"], rec["generator"], rec["impact"]),
-                         ("skill", "claude_code", 12000, "nous:stealth/space-bunny-alpha", "bajo"))
+                         ("skill", "claude_code", 12000, "openrouter:anthropic/claude-haiku-5.5", "bajo"))
         self.assertEqual((rec["evidence"]["sessions"], rec["evidence"]["days"]), (4, 3))
         self.assertNotIn("ana@acme.com", rec["draft"])
         self.assertFalse(os.path.exists(self.lock))
@@ -145,8 +145,8 @@ class TestRun(EngineTestCase):
         run_id, status = self.run_engine(hermes_runner(None, None, None))
         self.assertEqual(status, "degraded")
         run = store.get_run(self.db, run_id)
-        self.assertEqual((run["attempts"], run["model"], run["created"]), (3, None, 1))
-        self.assertIn("nous:stealth/space-bunny-alpha: ", run["error"])
+        self.assertEqual((run["attempts"], run["model"], run["created"]), (2, None, 1))
+        self.assertIn("openrouter:anthropic/claude-haiku-5.5: ", run["error"])
         [rec] = store.list_recommendations(self.db)
         self.assertEqual(rec["generator"], "reglas")
 
@@ -183,6 +183,13 @@ class TestRun(EngineTestCase):
         return {("claude_code", "s1"): 5000, ("claude_code", "s2"): 5000,
                 ("claude_code", "s3"): 5000}
 
+    def test_llm_ok_without_recommendation_does_not_fill_with_heuristic(self):
+        tokens = self.solo_triple_fixture()
+        run_id, status = self.run_engine(hermes_runner({"groups": [], "recommendations": []}), tokens)
+        self.assertEqual(status, "ok")
+        self.assertEqual(store.get_run(self.db, run_id)["clusters"], 0)
+        self.assertEqual(store.list_recommendations(self.db, "todas"), [])
+
     def test_reuses_known_signature_without_calling_llm(self):
         SOLO_GROUPED = {"groups": [],
                         "recommendations": [{"group_id": "c1", "kind": "skill",
@@ -198,7 +205,7 @@ class TestRun(EngineTestCase):
         self.assertEqual(status, "ok")
         self.assertEqual(store.get_run(self.db, run_id)["attempts"], 0)
         [rec] = store.list_recommendations(self.db)
-        self.assertEqual(rec["generator"], "nous:stealth/space-bunny-alpha")
+        self.assertEqual(rec["generator"], "openrouter:anthropic/claude-haiku-5.5")
 
     def test_reuses_known_text_when_cluster_grows(self):
         # Un prompt nuevo cambia la firma exacta del cluster; la recomendación sigue siendo la misma.
@@ -218,7 +225,7 @@ class TestRun(EngineTestCase):
         self.assertEqual(status, "ok")
         self.assertEqual(store.get_run(self.db, run_id)["attempts"], 0)
         [rec] = store.list_recommendations(self.db)
-        self.assertEqual(rec["generator"], "nous:stealth/space-bunny-alpha")
+        self.assertEqual(rec["generator"], "openrouter:anthropic/claude-haiku-5.5")
         self.assertEqual(rec["evidence"]["sessions"], 4)
 
     def test_reuses_llm_merged_group_as_a_single_recommendation(self):

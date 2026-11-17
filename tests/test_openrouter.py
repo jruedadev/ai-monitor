@@ -1,11 +1,20 @@
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 from collectors import openrouter
 
 
 class TestOpenRouterCollector(unittest.TestCase):
+    def setUp(self):
+        # Aísla el entorno: una OPENROUTER_API_KEY real no debe alterar los tests
+        # ni aparecer en la salida de un fallo.
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop("OPENROUTER_API_KEY", None)
+
     def test_missing_api_key_marks_unavailable(self):
         data = openrouter.collect(
             api_key=None, fetch=lambda url, key: {},

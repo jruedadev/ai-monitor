@@ -125,7 +125,8 @@ class TestListAndStatus(RecommendationsAPITestCase):
         status, body = self.request("GET", "/api/engine-settings")
         self.assertEqual(status, 200)
         self.assertEqual(body["backend"], "hermes")
-        self.assertEqual(len(body["llm_chain"]), 3)
+        self.assertEqual(body["llm_chain"], ["openrouter:anthropic/claude-haiku-5.5",
+                                             "openrouter:deepseek/deepseek-v4-flash"])
 
 
 class TestRun(RecommendationsAPITestCase):
@@ -177,7 +178,7 @@ class TestEngineSettings(RecommendationsAPITestCase):
         self.assertEqual({k: body[k] for k in payload}, payload)
         self.assertEqual(set(body["available"]), {"hermes", "claude"})
         status, body = self.request("POST", "/api/engine-settings",
-                                    {"backend": "hermes", "llm_chain": ["openrouter:openai/gpt-5"]})
+                                    {"backend": "hermes", "llm_chain": ["azure:openai/gpt-5"]})
         self.assertEqual(status, 400)
         self.assertIn("free", body["error"])
         self.assertEqual(self.request("POST", "/api/engine-settings", {"backend": "x"})[0], 400)

@@ -11,7 +11,7 @@ import clients
 import history
 from recommend import cluster as clustering
 from recommend import cost, heuristics, llm, store
-from recommend.prompts import ENGINE_DIR, read_all
+from recommend.prompts import ENGINE_DIR, has_intent, read_all
 from recommend.redact import redact
 import briefing
 
@@ -168,6 +168,7 @@ def _analyze(settings, db_path, today, prompt_overrides, session_tokens, runner,
     since = (today - timedelta(days=WINDOW_DAYS - 1)).isoformat()
     raw, errors = read_all(since, prompt_overrides, engine_dir)
     prompts = [p._replace(text=redact(p.text)) for p in raw]
+    prompts = [p for p in prompts if has_intent(p.text)]
     if session_tokens is None:
         session_tokens = load_session_tokens(db_path)
     try:
@@ -225,7 +226,9 @@ def _analyze(settings, db_path, today, prompt_overrides, session_tokens, runner,
                     texts.update(llm.validate_recommendations(result["data"], set(grouped)))
                 else:
                     merged = []
-                groups = clustering.rank_final(merged + reused_groups)
+                # Con respuesta válida del LLM, un grupo sin su recomendación no se
+                # rellena con la heurística (saldría el texto crudo del cluster como título).
+                groups = clustering.rank_final([g for g in merged + reused_groups if g.cluster_id in texts])
             else:
                 groups, degraded = clustering.lexical_clusters(prompts, session_tokens), True
 

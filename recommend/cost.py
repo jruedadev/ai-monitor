@@ -8,6 +8,29 @@ import briefing
 PERSISTED_RULES = (briefing.rule_spike_day, briefing.rule_project_concentration,
                    briefing.rule_subscription_missing)
 IMPACT = {"warning": "alto", "info": "medio"}
+# Un pico de céntimos no es una recomendación: el día debe costar al menos esto.
+MIN_SPIKE_USD = 1.0
+
+
+def _max_day_cost(window_rows):
+    per_day = {}
+    for r in window_rows:
+        per_day[r["date"]] = per_day.get(r["date"], 0.0) + (r["cost"] or 0)
+    return max(per_day.values(), default=0.0)
+
+
+def _projects_with_cost(window_rows):
+    return {r["project"] for r in window_rows if (r["cost"] or 0) > 0}
+
+
+def _worth_persisting(signal, ctx):
+    """Descarta señales que son ciertas pero no informan: 'un proyecto concentra el
+    100 %' cuando solo hay uno, y picos de céntimos."""
+    if signal["id"] == "project_concentration" and len(_projects_with_cost(ctx["window_rows"])) < 2:
+        return False
+    if signal["id"] == "spike_day" and _max_day_cost(ctx["window_rows"]) < MIN_SPIKE_USD:
+        return False
+    return True
 
 
 def project_from_link(link):
@@ -40,7 +63,7 @@ def cost_recommendations(project_rows, model_rows, settings, today, roots=None):
         ctx = briefing.build_context(project_rows, model_rows, settings, today, source, roots=roots)
         for rule in PERSISTED_RULES:
             signal = rule(ctx)
-            if not signal:
+            if not signal or not _worth_persisting(signal, ctx):
                 continue
             project = project_from_link(signal["link"])
             out.append({

@@ -439,7 +439,8 @@ def load(db_path):
     settings = _empty_settings()
     if not os.path.exists(db_path):
         return [], [], settings
-    con = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
+    # timeout = busy_timeout: espera si el escritor (el servidor) tiene la base bloqueada.
+    con = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)
     try:
         tables = {name for (name,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         project_rows = []
@@ -468,7 +469,8 @@ def load_client_roots(db_path):
     Los sqlite3.Error se propagan para que get_briefing los marque como degradados."""
     if not os.path.exists(db_path):
         return clients.default_roots()
-    con = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
+    # timeout = busy_timeout: espera si el escritor (el servidor) tiene la base bloqueada.
+    con = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)
     try:
         tables = {name for (name,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         if "app_settings" not in tables:

@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 
 from recommend.redact import redact
-from recommend.settings import is_free, parse_entry
+from recommend.settings import MAX_CALL_COST_USD, hermes_entry_allowed, parse_entry
 
 KINDS = ("skill", "plugin", "prompt")
 TIMEOUT_SECONDS = 120
@@ -144,8 +144,8 @@ def _hermes_attempt(prompt, entry, runner, cwd):
         provider, model = parse_entry(entry)
     except ValueError as exc:
         raise AttemptError(str(exc)) from None
-    if not is_free(model):
-        raise AttemptError("con Hermes solo se permiten modelos free")
+    if not hermes_entry_allowed(provider, model):
+        raise AttemptError("con Hermes solo se permiten modelos free de nous o modelos de openrouter")
     fd, usage_path = tempfile.mkstemp(prefix="usage-", suffix=".json", dir=cwd)
     os.close(fd)
     os.unlink(usage_path)  # Hermes lo crea; si no aparece, el intento falla
@@ -164,8 +164,12 @@ def _hermes_attempt(prompt, entry, runner, cwd):
             tokens = int(usage.get("total_tokens") or 0)
         except (TypeError, ValueError):
             raise AttemptError("usage-file con valores no numéricos") from None
-        if cost > 0:
+        if provider == "nous" and cost > 0:
             raise AttemptError(f"costo {cost} > 0 con un modelo que debía ser free")
+        # Hermes no permite limitar el gasto antes de la llamada: el tope se aplica al
+        # resultado y descarta la respuesta si el modelo costó más de lo acordado.
+        if cost > MAX_CALL_COST_USD:
+            raise AttemptError(f"costo {cost} USD supera el tope de {MAX_CALL_COST_USD} USD por llamada")
         return _parse(stdout), tokens, cost
     finally:
         if os.path.exists(usage_path):
