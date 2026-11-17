@@ -11,15 +11,20 @@ MIN_CHARS = 20
 MAX_CHARS = 4000
 WINDOW_DAYS = 30
 ENGINE_DIR = os.path.expanduser("~/.local/share/ai-monitor/motor-recomendaciones")
+# Mensajes que escribe el arnés o la herramienta y que llegan con rol de usuario:
+# marcadores entre corchetes ("[Request interrupted by user]", "[IMPORTANT: …]"),
+# etiquetas XML ("<command-name>") y órdenes automáticas de condensado. Ninguno
+# es una intención del usuario, así que no entran al clustering.
+HARNESS_PREFIXES = ("[", "<", "Condense the tool payload")
 
 
 def clean_text(text):
     """Texto útil del usuario o None: descarta lo corto y el contexto inyectado
-    por la herramienta (etiquetas tipo <command-name>, <environment_context>)."""
+    por la herramienta o el arnés (ver HARNESS_PREFIXES)."""
     if not isinstance(text, str):
         return None
     text = text.strip()
-    if len(text) < MIN_CHARS or text.startswith("<"):
+    if len(text) < MIN_CHARS or text.startswith(HARNESS_PREFIXES):
         return None
     return text[:MAX_CHARS]
 

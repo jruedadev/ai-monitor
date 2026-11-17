@@ -11,6 +11,7 @@ EMAIL = "<correo>"
 IP = "<ip>"
 
 _JWT = re.compile(r"\beyJ[\w-]{5,}\.[\w-]{5,}\.[\w-]{5,}")
+_BEARER = re.compile(r"(?i)\b(bearer)\s+[A-Za-z0-9._~+/=-]{8,}")
 _KEYS = re.compile(r"\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})\b")
 _KEY_VALUE = re.compile(
     r"(?i)\b(password|passwd|token|api[_-]?key|secret)(\s*[=:]\s*)(\"[^\"]*\"|'[^']*'|[^\s,;&]+)")
@@ -44,6 +45,7 @@ def redact(text):
     if not text:
         return ""
     text = _JWT.sub(SECRET, text)
+    text = _BEARER.sub(rf"\1 {SECRET}", text)
     text = _KEYS.sub(SECRET, text)
     text = _URL.sub(r"\1", text)
     text = _KEY_VALUE.sub(lambda m: f"{m.group(1)}{m.group(2)}{SECRET}", text)

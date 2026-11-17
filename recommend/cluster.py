@@ -37,6 +37,9 @@ document refactor migrate install configure validate verify check analyze summar
 """.split())
 
 _WORD = re.compile(r"[a-z0-9]+")
+# Palabras de los placeholders de redacción (<secreto>, <correo>, <ruta>): son datos
+# ocultos, no intención, y no deben formar grupos ni firmas.
+PLACEHOLDER_WORDS = frozenset({"secreto", "correo", "ruta"})
 _PASTED = re.compile(
     r"Traceback \(most recent call last\)|^\s+at [\w.$<>]+\(|^\s*[{\[]\s*\"|\b(?:ERROR|WARN(?:ING)?|FATAL)\b"
     r"|^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}", re.MULTILINE)
@@ -47,7 +50,7 @@ PASTED_MIN_LINES = 15
 def normalize(text):
     plain = unicodedata.normalize("NFKD", text.lower())
     plain = "".join(ch for ch in plain if not unicodedata.combining(ch))
-    return [w for w in _WORD.findall(plain) if w not in STOPWORDS]
+    return [w for w in _WORD.findall(plain) if w not in STOPWORDS and w not in PLACEHOLDER_WORDS]
 
 
 def trigrams(words):

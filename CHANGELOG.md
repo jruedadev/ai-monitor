@@ -9,6 +9,7 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 ### Corregido
 - El briefing espera a que el servidor libere la base de datos en vez de fallar cuando ambos escriben a la vez.
 - Si el servidor no responde en 15 segundos, la interfaz muestra un error en vez de quedarse en blanco.
+- Las recomendaciones dejan de salir de mensajes internos de la herramienta (marcadores entre corchetes, interrupciones y órdenes automáticas de condensado) y de los secretos con prefijo `Bearer`.
 
 ## [1.2.0] - 2026-10-01
 
