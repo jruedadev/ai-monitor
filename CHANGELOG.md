@@ -6,6 +6,9 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 
 ## [Sin publicar]
 
+### Corregido
+- El briefing espera a que el servidor libere la base de datos en vez de fallar cuando ambos escriben a la vez.
+
 ## [1.2.0] - 2026-10-01
 
 ### Añadido
