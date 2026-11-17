@@ -6,7 +6,7 @@ from datetime import date
 
 from recommend import cost
 from recommend.cluster import normalize
-from recommend.prompts import clean_text, has_intent
+from recommend.prompts import clean_text, has_intent, is_engine_prompt
 from recommend.redact import redact
 
 TODAY = date(2026, 9, 20)
@@ -63,6 +63,13 @@ class TestPromptsWithoutIntent(unittest.TestCase):
     def test_real_request_with_placeholders_is_kept(self):
         text = redact("escribe a ana@acme.com y corrige la validación de facturas")
         self.assertTrue(has_intent(text))
+
+
+class TestEngineOwnPrompts(unittest.TestCase):
+    def test_prompts_the_engine_sends_are_recognised(self):
+        from recommend.llm import INSTRUCTIONS
+        self.assertTrue(is_engine_prompt(INSTRUCTIONS + "\n\nCandidatos: []"))
+        self.assertFalse(is_engine_prompt("revisa el endpoint de facturas y corrige la validación"))
 
 
 class TestPersistedCostSignals(unittest.TestCase):

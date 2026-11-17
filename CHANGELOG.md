@@ -16,6 +16,8 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 - El motor no propone avisos de costo sin importancia: un pico de menos de 1 $ o "un proyecto concentra el 100 %" cuando solo hay uno.
 - Las recomendaciones no salen de una URL pegada ni de un secreto redactado: un prompt sin texto útil no entra al clustering.
 - Con una respuesta válida del LLM, un grupo sin recomendación ya no se rellena con el texto crudo del cluster.
+- El motor ya no se lee a sí mismo: los prompts que envía a Hermes no cuentan como uso del usuario.
+- El motor analiza los últimos 90 días de prompts en vez de 30.
 
 ## [1.2.0] - 2026-10-01
 

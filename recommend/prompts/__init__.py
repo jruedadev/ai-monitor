@@ -25,6 +25,15 @@ _PLACEHOLDER = re.compile(r"<[^<>\s]+>")
 _WORD = re.compile(r"[^\W\d_]{2,}")
 
 
+# Primeras palabras de los prompts que el propio motor envía a Hermes o a Claude. Si
+# Hermes los guarda como sesión, no son intención del usuario y no deben entrar al clustering.
+ENGINE_PROMPT_MARKERS = ("Eres un asistente que analiza patrones repetidos", "Eres un analista de hábitos de uso")
+
+
+def is_engine_prompt(text):
+    return bool(text) and text.startswith(ENGINE_PROMPT_MARKERS)
+
+
 def has_intent(text):
     """True si el texto (ya redactado) tiene al menos MIN_INTENT_WORDS palabras fuera
     de URLs y placeholders."""
