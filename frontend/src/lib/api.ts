@@ -90,21 +90,37 @@ export class HttpError extends Error {
   }
 }
 
+/** Tiempo máximo de espera por petición. Sin él, un servidor colgado deja la UI en blanco. */
+const REQUEST_TIMEOUT_MS = 15_000;
+
 /** fetch + JSON que falla con un Error legible si el servidor responde != 2xx
- * (sin esto un 500 llega como JSON de error y se trata como datos válidos). */
+ * (sin esto un 500 llega como JSON de error y se trata como datos válidos).
+ * Aborta tras REQUEST_TIMEOUT_MS y lo reporta como error legible. */
 async function getJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, init);
-  if (!res.ok) {
-    let detail = "";
+  const label = `${init?.method ?? "GET"} ${input}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    let res: Response;
     try {
-      const body = (await res.json()) as { error?: string };
-      if (body?.error) detail = `: ${body.error}`;
+      res = await fetch(input, { ...init, signal: controller.signal });
     } catch {
-      // cuerpo no JSON: basta con el status
+      throw new Error(`${label} → sin respuesta del servidor (timeout o red)`);
     }
-    throw new HttpError(`${init?.method ?? "GET"} ${input} → HTTP ${res.status}${detail}`, res.status);
+    if (!res.ok) {
+      let detail = "";
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body?.error) detail = `: ${body.error}`;
+      } catch {
+        // cuerpo no JSON: basta con el status
+      }
+      throw new HttpError(`${label} → HTTP ${res.status}${detail}`, res.status);
+    }
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json() as Promise<T>;
 }
 
 /** Qué opción sale más barata para el mismo consumo (usado por roi.ts y el briefing). */
