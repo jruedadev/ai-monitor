@@ -16,7 +16,7 @@ from recommend.redact import redact
 import briefing
 
 LOCK_PATH = os.path.expanduser("~/.local/share/ai-monitor/recommend.lock")
-WINDOW_DAYS = 30
+WINDOW_DAYS = 90
 IMPACT_HIGH = 0.10
 IMPACT_MEDIUM = 0.03
 FRESH_LOCK_SECONDS = 10

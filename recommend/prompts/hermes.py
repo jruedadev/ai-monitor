@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from collectors.hermes import _project_for
-from recommend.prompts import Prompt, clean_text, day_from_epoch
+from recommend.prompts import Prompt, clean_text, day_from_epoch, is_engine_prompt
 
 _SESSION_COLUMNS = ("cwd", "source", "chat_type")
 
@@ -36,7 +36,7 @@ def read_prompts(since, override=None):
         info = dict(zip(cols, row[3:]))
         day = day_from_epoch(timestamp)
         text = clean_text(content)
-        if not text or day is None or day < since:
+        if not text or day is None or day < since or is_engine_prompt(text):
             continue
         project = _project_for(info.get("cwd"), info.get("source"), info.get("chat_type"))
         out.append(Prompt("hermes", project, str(session_id), day, text))
