@@ -4,10 +4,13 @@ dependencias internas: lo usan store.py, llm.py y server.py."""
 BACKENDS = ("hermes", "claude", "none")
 DEFAULT_BACKEND = "hermes"
 DEFAULT_CHAIN = (
-    "nous:stealth/space-bunny-alpha",
-    "nous:upstage/solar-pro4:free",
-    "nous:inclusionai/ling-3.0-flash-sante:free",
+    "openrouter:anthropic/claude-haiku-5.5",
+    "openrouter:deepseek/deepseek-v4-flash",
 )
+# Proveedores que Hermes puede usar: nous solo con modelos free (coste 0);
+# openrouter con modelos de pago, pero cada llamada no puede superar este coste.
+HERMES_PROVIDERS = ("nous", "openrouter")
+MAX_CALL_COST_USD = 0.05
 _KEYS = {"backend", "llm_chain"}
 
 
@@ -17,6 +20,12 @@ class EngineSettingsError(ValueError):
 
 def is_free(model):
     return isinstance(model, str) and (model.endswith(":free") or model.startswith("stealth/"))
+
+
+def hermes_entry_allowed(provider, model):
+    if provider == "nous":
+        return is_free(model)
+    return provider == "openrouter"
 
 
 def parse_entry(entry):
@@ -43,7 +52,8 @@ def validate_engine_settings(payload):
             provider, model = parse_entry(entry)
         except ValueError as exc:
             raise EngineSettingsError(str(exc)) from None
-        if backend == "hermes" and not is_free(model):
-            raise EngineSettingsError(f"Con Hermes solo se permiten modelos free: {entry}")
+        if backend == "hermes" and not hermes_entry_allowed(provider, model):
+            raise EngineSettingsError(
+                f"Con Hermes solo se permiten modelos free de nous o modelos de openrouter: {entry}")
         normalized.append(f"{provider}:{model}")
     return {"backend": backend, "llm_chain": normalized}

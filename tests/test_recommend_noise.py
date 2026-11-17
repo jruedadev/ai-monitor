@@ -6,7 +6,7 @@ from datetime import date
 
 from recommend import cost
 from recommend.cluster import normalize
-from recommend.prompts import clean_text
+from recommend.prompts import clean_text, has_intent
 from recommend.redact import redact
 
 TODAY = date(2026, 9, 20)
@@ -52,6 +52,17 @@ class TestPlaceholdersAreNotIntent(unittest.TestCase):
         for placeholder in ("secreto", "correo", "ruta"):
             with self.subTest(placeholder=placeholder):
                 self.assertNotIn(placeholder, words)
+
+
+class TestPromptsWithoutIntent(unittest.TestCase):
+    def test_bare_url_bearer_placeholder_and_secret_are_dropped(self):
+        for text in ("https://web-dev.alumnuslms.com/", "Bearer <secreto>", "<correo> <ruta>/x.py"):
+            with self.subTest(text=text):
+                self.assertFalse(has_intent(redact(text)))
+
+    def test_real_request_with_placeholders_is_kept(self):
+        text = redact("escribe a ana@acme.com y corrige la validación de facturas")
+        self.assertTrue(has_intent(text))
 
 
 class TestPersistedCostSignals(unittest.TestCase):

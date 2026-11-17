@@ -2,6 +2,7 @@
 escriben. Cada lector sigue la convención de los collectors: parámetro de
 override para tests y [] cuando la fuente no existe."""
 import os
+import re
 from collections import namedtuple
 from datetime import datetime, timezone
 
@@ -16,6 +17,19 @@ ENGINE_DIR = os.path.expanduser("~/.local/share/ai-monitor/motor-recomendaciones
 # etiquetas XML ("<command-name>") y órdenes automáticas de condensado. Ninguno
 # es una intención del usuario, así que no entran al clustering.
 HARNESS_PREFIXES = ("[", "<", "Condense the tool payload")
+# Un prompt sin intención es una URL pegada, un secreto o un placeholder de redacción
+# ("Bearer <secreto>"): no describe una tarea repetible, así que no entra al clustering.
+MIN_INTENT_WORDS = 3
+_URL = re.compile(r"https?://\S+")
+_PLACEHOLDER = re.compile(r"<[^<>\s]+>")
+_WORD = re.compile(r"[^\W\d_]{2,}")
+
+
+def has_intent(text):
+    """True si el texto (ya redactado) tiene al menos MIN_INTENT_WORDS palabras fuera
+    de URLs y placeholders."""
+    rest = _PLACEHOLDER.sub(" ", _URL.sub(" ", text or ""))
+    return len(_WORD.findall(rest)) >= MIN_INTENT_WORDS
 
 
 def clean_text(text):

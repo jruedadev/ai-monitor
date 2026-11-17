@@ -6,11 +6,16 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 
 ## [Sin publicar]
 
+### Añadido
+- El motor de recomendaciones puede usar modelos de OpenRouter a través de Hermes. Por defecto usa Claude Haiku 5.5 y DeepSeek V4 Flash como respaldo; cada llamada tiene un tope de 0,05 USD.
+
 ### Corregido
 - El briefing espera a que el servidor libere la base de datos en vez de fallar cuando ambos escriben a la vez.
 - Si el servidor no responde en 15 segundos, la interfaz muestra un error en vez de quedarse en blanco.
 - Las recomendaciones dejan de salir de mensajes internos de la herramienta (marcadores entre corchetes, interrupciones y órdenes automáticas de condensado) y de los secretos con prefijo `Bearer`.
 - El motor no propone avisos de costo sin importancia: un pico de menos de 1 $ o "un proyecto concentra el 100 %" cuando solo hay uno.
+- Las recomendaciones no salen de una URL pegada ni de un secreto redactado: un prompt sin texto útil no entra al clustering.
+- Con una respuesta válida del LLM, un grupo sin recomendación ya no se rellena con el texto crudo del cluster.
 
 ## [1.2.0] - 2026-10-01
 
