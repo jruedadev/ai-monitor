@@ -63,6 +63,20 @@ class TestNormalize(unittest.TestCase):
         with self.assertRaises(accounts.AccountsError):
             accounts.normalize_accounts([acct(monthly_cost=-1)])
 
+    def test_rejects_empty_list(self):
+        self.assertRaises(accounts.AccountsError, accounts.normalize_accounts, [])
+
+    def test_rejects_trailing_newline_in_id_and_date(self):
+        with self.assertRaises(accounts.AccountsError):
+            accounts.normalize_accounts([acct(), robc(id="abc\n")])
+        with self.assertRaises(accounts.AccountsError):
+            accounts.normalize_accounts([acct(start_date="2026-01-05\n")])
+
+    def test_rejects_non_finite_cost(self):
+        for bad in (float("nan"), float("inf")):
+            with self.assertRaises(accounts.AccountsError):
+                accounts.normalize_accounts([acct(monthly_cost=bad)])
+
 
 class TestLegacy(unittest.TestCase):
     def test_legacy_seeds_personal_from_roi_keys(self):
