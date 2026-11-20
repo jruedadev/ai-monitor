@@ -1,8 +1,10 @@
 import { createContext, useContext } from "react";
+import type { Account } from "@/lib/api";
 import { DEFAULT_CLIENT_ROOTS, type ClientRoot } from "@/lib/clients";
 
 export interface AppSettingsState {
   roots: ClientRoot[];
+  accounts: Account[];
   completedAt: string | null;
   loading: boolean;
   error: string | null;
@@ -12,6 +14,7 @@ export interface AppSettingsState {
 
 const FALLBACK: AppSettingsState = {
   roots: DEFAULT_CLIENT_ROOTS,
+  accounts: [],
   completedAt: null,
   loading: false,
   error: "AppSettingsProvider ausente",

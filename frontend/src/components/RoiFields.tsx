@@ -1,4 +1,5 @@
-import type { RoiDraft, RoiPlan } from "@/lib/roiDraft";
+import { Trash2 } from "lucide-react";
+import type { AccountDraft, RoiDraft, RoiPlan } from "@/lib/roiDraft";
 
 interface RoiFieldsProps {
   draft: RoiDraft;
@@ -37,6 +38,62 @@ function Field({ label, value, onChange, type = "number" }: {
         type={type}
         {...(type === "number" ? { min: "0", step: "0.01", placeholder: "—" } : {})}
         value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+      />
+    </label>
+  );
+}
+
+interface AccountFieldsProps {
+  account: AccountDraft;
+  onChange: (patch: Partial<AccountDraft>) => void;
+  onSetDefault: () => void;
+  onRemove: () => void;
+  canRemove: boolean;
+}
+
+/** Una fila por cuenta: nombre, directorio de configuración, costo, inicio, default y quitar. */
+export function AccountFields({ account, onChange, onSetDefault, onRemove, canRemove }: AccountFieldsProps) {
+  return (
+    <fieldset className="space-y-3 rounded-lg border p-4">
+      <legend className="px-1 text-xs text-muted-foreground">Cuenta {account.id}</legend>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <TextField label="Nombre" value={account.label} onChange={(v) => onChange({ label: v })} maxLength={40} />
+        <TextField label="Directorio de Claude (ruta absoluta)" value={account.location} placeholder="/home/usuario/.claude" onChange={(v) => onChange({ location: v })} />
+        <Field label="Costo mensual ($)" value={account.monthly_cost?.toString() ?? ""} onChange={(v) => onChange({ monthly_cost: v === "" ? null : Number(v) })} />
+        <Field type="date" label="Inicio de la suscripción" value={account.start_date ?? ""} onChange={(v) => onChange({ start_date: v || null })} />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="default-claude-account" checked={account.default} onChange={onSetDefault} />
+          Cuenta por defecto
+        </label>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={!canRemove}
+          title={canRemove ? undefined : "La cuenta por defecto no se puede quitar: marca otra como por defecto primero."}
+          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden />Quitar
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+function TextField({ label, value, onChange, placeholder, maxLength }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; maxLength?: number;
+}) {
+  return (
+    <label className="block space-y-1.5">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        maxLength={maxLength}
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
       />

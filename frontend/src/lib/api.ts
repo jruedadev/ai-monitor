@@ -156,6 +156,22 @@ export interface BriefingSubscription {
   savings: number | null;
 }
 
+export interface Account {
+  id: string;
+  provider: "claude_code";
+  label: string;
+  location: string;
+  default: boolean;
+  monthly_cost: number | null;
+  start_date: string | null;
+}
+
+export interface BriefingAccount extends BriefingSubscription {
+  id: string;
+  label: string;
+  source: string;
+}
+
 export interface BriefingProject {
   project: string;
   client: string;
@@ -175,6 +191,7 @@ export interface BriefingResponse {
     cost_incomplete: boolean;
   };
   subscription: BriefingSubscription;
+  accounts?: BriefingAccount[];
   top_projects: BriefingProject[];
   attention: BriefingSignal[];
   degraded: boolean;
@@ -204,6 +221,7 @@ export function saveRoiSettings(settings: Partial<RoiSettings>): Promise<RoiSett
 
 export interface AppSettings {
   client_roots: ClientRoot[];
+  accounts: Account[];
   onboarding_completed_at: string | null;
   degraded: boolean;
 }
@@ -212,7 +230,7 @@ export function fetchAppSettings(): Promise<AppSettings> {
   return getJson("/api/app-settings");
 }
 
-export function saveAppSettings(settings: { client_roots: ClientRoot[] }): Promise<AppSettings> {
+export function saveAppSettings(settings: { client_roots: ClientRoot[]; accounts?: Account[] }): Promise<AppSettings> {
   return getJson("/api/app-settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

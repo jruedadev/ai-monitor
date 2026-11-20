@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { CommandPalette } from "@/components/CommandPalette";
 import { SourceFilter } from "@/components/SourceFilter";
 import type { ProjectUsage, UsageSnapshot } from "@/lib/api";
+import { useAppSettings } from "@/hooks/appSettingsContext";
 import { promptPath } from "@/lib/routes";
 import type { SourceKey } from "@/lib/sources";
 
@@ -19,6 +20,7 @@ interface TopBarProps {
 
 export function TopBar({ connected, source, onSourceChange, sources, combined }: TopBarProps) {
   const { pathname } = useLocation();
+  const { accounts } = useAppSettings();
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export function TopBar({ connected, source, onSourceChange, sources, combined }:
         <span className="text-link">ai-monitor</span>:{promptPath(pathname)}$
       </p>
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        <SourceFilter value={source} onChange={onSourceChange} />
+        <SourceFilter value={source} onChange={onSourceChange} accounts={accounts} />
         <button
           type="button"
           onClick={() => setPaletteOpen(true)}

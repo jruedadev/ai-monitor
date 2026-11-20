@@ -5,7 +5,7 @@ import { AlertCircle, MousePointerClick, RotateCw, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useHistory } from "@/hooks/useHistory";
 import { useClientRoots } from "@/hooks/appSettingsContext";
-import { SOURCE_META } from "@/lib/sources";
+import { sourceMeta as metaOf } from "@/lib/sources";
 import { clientOf, type ClientRoot } from "@/lib/clients";
 import { formatCompact, formatDate, formatDayShort } from "@/lib/format";
 import type { HistoryResponse } from "@/lib/api";
@@ -79,7 +79,7 @@ export function TrendChart({ section, clientFilter, selectedDate, onSelectDate }
     );
   };
 
-  const sourceMeta = section !== "all" ? SOURCE_META[section] : undefined;
+  const sourceMeta = section !== "all" ? metaOf(section) : undefined;
   // El color sigue a la entidad: la línea de una fuente usa su color de identidad;
   // la vista agregada ("Todo") no es ninguna fuente, así que va en tinta neutra.
   const strokeStyle = { "--trend-stroke": sourceMeta?.color ?? "var(--foreground)" } as CSSProperties;

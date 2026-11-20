@@ -4,7 +4,7 @@ import { useHistory } from "@/hooks/useHistory";
 import { dailyCostSeries } from "@/lib/briefing";
 import { formatDayShort, formatUsd } from "@/lib/format";
 import { withSource } from "@/lib/routes";
-import { SOURCE_META, type SourceKey } from "@/lib/sources";
+import { sourceMeta, type SourceKey } from "@/lib/sources";
 
 const HISTORY_DAYS = 62;
 
@@ -20,7 +20,7 @@ export function DailySpark({ source, from, to, search }: DailySparkProps) {
   const points = history.status === "ready" ? dailyCostSeries(history.data, source, from, to) : [];
   const max = points.reduce((m, p) => Math.max(m, p.cost), 0);
   // Identidad de la fuente filtrada; tinta neutra en "Todas" (el cyan nunca va en datos).
-  const color = source === "all" ? "var(--muted-foreground)" : SOURCE_META[source].color;
+  const color = source === "all" ? "var(--muted-foreground)" : sourceMeta(source).color;
 
   return (
     <section aria-labelledby="spark-title" className="rounded-xl border bg-card p-5">

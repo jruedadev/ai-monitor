@@ -1,6 +1,6 @@
 import type { ProjectUsage, UsageSnapshot } from "@/lib/api";
 import { clientOf, type ClientRoot } from "@/lib/clients";
-import type { SourceKey } from "@/lib/sources";
+import { snapshotSource, type SourceKey } from "@/lib/sources";
 
 /** Proyectos (o modelos, en OpenRouter) para una fuente, opcionalmente acotados a un cliente. */
 export function projectsFor(
@@ -26,9 +26,9 @@ export function projectsFor(
     );
   } else {
     result = Object.fromEntries(
-      Object.entries(sources[source]).map(([name, v]) => [
+      Object.entries(sources[snapshotSource(source)]).map(([name, v]) => [
         name,
-        { total_tokens: v.total_tokens, cost: v.cost, messages: v.messages, session_count: v.session_count, by_source: [source] },
+        { total_tokens: v.total_tokens, cost: v.cost, messages: v.messages, session_count: v.session_count, by_source: [snapshotSource(source)] },
       ]),
     );
   }

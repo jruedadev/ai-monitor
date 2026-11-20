@@ -15,7 +15,7 @@
  *   ?dia=YYYY-MM-DD          → día seleccionado en la tendencia / sesiones
  *   ?proyecto=<ruta>         → panel de detalle de proyecto abierto
  */
-import type { SourceKey } from "@/lib/sources";
+import { isAccountSource, normalizeFuente, type SourceKey } from "@/lib/sources";
 
 export const VIEW_KEYS = ["home", "activity", "spend", "roi", "projects", "recommendations", "settings", "onboarding", "office"] as const;
 export type ViewKey = (typeof VIEW_KEYS)[number];
@@ -38,7 +38,7 @@ const VIEW_PATH: Record<ViewKey, string> = {
   office: "/oficina",
 };
 
-const SOURCE_SLUG: Record<Exclude<SourceKey, "all">, string> = {
+const SOURCE_SLUG: Record<Exclude<SourceKey, "all" | `claude_code@${string}`>, string> = {
   claude_code: "claude-code",
   codex: "codex",
   opencode: "opencode",
@@ -88,11 +88,16 @@ export function viewPath(view: ViewKey, client?: string | null): string {
 }
 
 export function parseSource(slug: string | null): SourceKey {
-  return (slug && SLUG_SOURCE[slug]) || "all";
+  if (!slug) return "all";
+  const account = normalizeFuente(slug);
+  if (isAccountSource(account)) return account;
+  return SLUG_SOURCE[slug] || "all";
 }
 
 export function sourceSlug(source: SourceKey): string | null {
-  return source === "all" ? null : SOURCE_SLUG[source];
+  if (source === "all") return null;
+  if (isAccountSource(source)) return `claude-code@${source.slice("claude_code@".length)}`;
+  return SOURCE_SLUG[source];
 }
 
 export function withQuery(path: string, params: URLSearchParams): string {

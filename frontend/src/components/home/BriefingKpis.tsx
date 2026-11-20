@@ -36,6 +36,7 @@ export function BriefingKpis({ briefing, search }: { briefing: BriefingResponse;
   const { kpis, subscription, compare } = briefing;
   const partial = compare.coverage === "partial" && compare.since ? coverageLabel(compare.since) : null;
   const line = subscriptionLine(subscription);
+  const accounts = briefing.accounts ?? [];
 
   return (
     <section aria-label="Indicadores del mes" className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -53,6 +54,15 @@ export function BriefingKpis({ briefing, search }: { briefing: BriefingResponse;
           <Link to={withSource("/configuracion", search)} className="text-link underline-offset-4 hover:underline">
             Configura tu plan para comparar
           </Link>
+        )}
+        {accounts.length > 1 && (
+          <ul className="space-y-0.5 border-t pt-2 text-xs">
+            {accounts.map((a) => (
+              <li key={a.id}>
+                <span className="font-medium text-foreground">{a.label}</span>: {subscriptionHeadline(a)}
+              </li>
+            ))}
+          </ul>
         )}
       </Kpi>
       <Kpi label="Días activos" value={formatInt(kpis.active_days.current)}>

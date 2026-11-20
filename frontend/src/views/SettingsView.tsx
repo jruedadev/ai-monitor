@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { RotateCcw } from "lucide-react";
 import { ClientRootsForm } from "@/components/ClientRootsForm";
+import { AccountsForm } from "@/components/AccountsForm";
 import { SettingsForm } from "@/components/SettingsForm";
 import { EngineSettingsForm } from "@/components/EngineSettingsForm";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,6 +23,7 @@ export function SettingsView({ sources }: { sources: UsageSnapshot["sources"] | 
         </Link>
       </div>
       <ClientRootsForm paths={projectPaths(sources)} />
+      <AccountsForm />
       <SettingsForm />
       <EngineSettingsForm />
       <section aria-labelledby="sources-title" className="rounded-xl border bg-card p-5">
