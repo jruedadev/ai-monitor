@@ -7,6 +7,7 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 ## [Sin publicar]
 
 ### Añadido
+- Se modela el concepto de cuentas por proveedor (por ahora Claude Code), con validación de ids, cuenta por defecto, ruta y costo. Todavía no es visible en la interfaz.
 - El motor de recomendaciones puede usar modelos de OpenRouter a través de Hermes. Por defecto usa Claude Haiku 5.5 y DeepSeek V4 Flash como respaldo; cada llamada tiene un tope de 0,05 USD.
 
 ### Corregido
