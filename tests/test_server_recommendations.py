@@ -194,7 +194,9 @@ class TestAppSettings(RecommendationsAPITestCase):
     ROOTS = [{"root": "/srv/trabajo", "mode": "plano"}]
 
     def test_defaults_then_roundtrip(self):
-        self.assertEqual(self.request("GET", "/api/app-settings"), (200, {
+        status, body = self.request("GET", "/api/app-settings")
+        self.assertEqual(body.pop("accounts")[0]["id"], "personal")
+        self.assertEqual((status, body), (200, {
             "client_roots": [{"root": "DEV", "mode": "cliente"}], "onboarding_completed_at": None, "degraded": False}))
         status, body = self.request("POST", "/api/app-settings", {"client_roots": [{"root": "/srv/trabajo/", "mode": "plano"}]})
         self.assertEqual((status, body["client_roots"]), (200, self.ROOTS))

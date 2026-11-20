@@ -7,6 +7,7 @@ import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
+import accounts
 import clients
 
 DB_PATH_DEFAULT = os.path.expanduser("~/.local/share/ai-monitor/history.db")
@@ -97,7 +98,9 @@ def record_snapshot(sources, db_path=None):
     con = sqlite3.connect(db_path)
     cur = con.cursor()
 
-    for source_name in ("claude_code", "codex", "opencode", "hermes"):
+    source_names = ("claude_code", "codex", "opencode", "hermes") + tuple(
+        k for k in sources if accounts.is_claude_source(k) and k != "claude_code")
+    for source_name in source_names:
         for project, v in sources.get(source_name, {}).items():
             for date, day in (v.get("by_day") or {}).items():
                 cur.execute(
@@ -206,7 +209,7 @@ def save_roi_settings(settings, db_path=None):
 
 # --- Ajustes de la aplicación (spec 2026-09-29 §3.1) ----------------------------
 
-APP_SETTINGS_WRITABLE = ("client_roots",)
+APP_SETTINGS_WRITABLE = ("client_roots", "accounts")
 
 
 class AppSettingsError(ValueError):
@@ -230,7 +233,17 @@ def get_app_settings(db_path=None):
             value = None
         completed = value if isinstance(value, str) and value else None
     return {"client_roots": clients.parse_stored_roots(rows.get("client_roots")),
+            "accounts": _stored_accounts(rows.get("accounts"), db_path),
             "onboarding_completed_at": completed}
+
+
+def _stored_accounts(raw, db_path):
+    if raw is not None:
+        try:
+            return accounts.normalize_accounts(json.loads(raw))
+        except ValueError:  # JSON corrupto o AccountsError (subclase de ValueError)
+            pass
+    return accounts.legacy_accounts(get_roi_settings(db_path))
 
 
 def validate_app_settings(payload):
@@ -242,9 +255,15 @@ def validate_app_settings(payload):
     if "client_roots" not in payload:
         raise AppSettingsError("Falta client_roots")
     try:
-        return {"client_roots": clients.normalize_roots(payload["client_roots"])}
+        clean = {"client_roots": clients.normalize_roots(payload["client_roots"])}
     except clients.ClientRootsError as exc:
         raise AppSettingsError(str(exc)) from exc
+    if "accounts" in payload:
+        try:
+            clean["accounts"] = accounts.normalize_accounts(payload["accounts"])
+        except accounts.AccountsError as exc:
+            raise AppSettingsError(str(exc)) from exc
+    return clean
 
 
 def _put_app_setting(db_path, key, value):
@@ -262,6 +281,8 @@ def _put_app_setting(db_path, key, value):
 def save_app_settings(settings, db_path=None):
     """Recibe el resultado de validate_app_settings."""
     _put_app_setting(db_path, "client_roots", settings["client_roots"])
+    if "accounts" in settings:
+        _put_app_setting(db_path, "accounts", settings["accounts"])
 
 
 def complete_onboarding(db_path=None, now=None):

@@ -41,6 +41,34 @@ class TestHistory(unittest.TestCase):
         self.assertEqual(cur.fetchall(), [("2026-08-01", "__all__", 500, 0.05)])
         con.close()
 
+    def test_record_snapshot_keeps_same_project_in_two_accounts(self):
+        sources = {
+            "claude_code": {"/p": {"by_day": {"2026-11-20": {"tokens": 10, "cost": 1.0}}}},
+            "claude_code@robc": {"/p": {"by_day": {"2026-11-20": {"tokens": 7, "cost": 0.5}}}},
+        }
+        history.record_snapshot(sources, db_path=self.db_path)
+        con = sqlite3.connect(self.db_path)
+        rows = con.execute("SELECT source, tokens FROM daily_project "
+                           "WHERE date='2026-11-20' AND project='/p' ORDER BY source").fetchall()
+        con.close()
+        self.assertEqual(rows, [("claude_code", 10), ("claude_code@robc", 7)])
+
+    def test_record_snapshot_writes_extra_claude_account(self):
+        sources = {"claude_code@robc": {"/p": {"by_day": {"2026-11-20": {"tokens": 7, "cost": 0.5}}}}}
+        history.record_snapshot(sources, db_path=self.db_path)
+        con = sqlite3.connect(self.db_path)
+        rows = con.execute("SELECT source, project, tokens FROM daily_project").fetchall()
+        con.close()
+        self.assertEqual(rows, [("claude_code@robc", "/p", 7)])
+
+    def test_record_snapshot_schema_unchanged(self):
+        history.ensure_schema(self.db_path)
+        con = sqlite3.connect(self.db_path)
+        cols = [(r[1], r[2], r[3], r[5]) for r in con.execute("PRAGMA table_info(daily_project)")]
+        con.close()
+        self.assertEqual(cols, [("date", "TEXT", 1, 1), ("source", "TEXT", 1, 2), ("project", "TEXT", 1, 3),
+                                ("tokens", "INTEGER", 1, 0), ("cost", "REAL", 0, 0)])
+
     def test_record_snapshot_replaces_existing_day_not_deletes_absent_ones(self):
         sources_day1 = {
             "claude_code": {"/home/user/demo": {"by_day": {
