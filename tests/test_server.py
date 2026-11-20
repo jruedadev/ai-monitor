@@ -177,7 +177,8 @@ class TestServerAPI(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 400)
 
     ACCOUNTS = [
-        {"id": "personal", "provider": "claude_code", "label": "Personal", "location": "/home/u/.claude",
+        {"id": "personal", "provider": "claude_code", "label": "Personal",
+         "location": os.path.expanduser("~/.claude"),
          "default": True, "monthly_cost": 20, "start_date": None},
         {"id": "robc", "provider": "claude_code", "label": "Robc", "location": "/home/u/.claude-robc",
          "default": False, "monthly_cost": 100, "start_date": None},
@@ -219,6 +220,15 @@ class TestServerAPI(unittest.TestCase):
             self._post("/api/app-settings", {"client_roots": clients.default_roots(), "accounts": swapped})
         self.assertEqual(ctx.exception.code, 400)
         self.assertEqual(history.get_app_settings(self.db_path)["accounts"], self.ACCOUNTS)
+
+    def test_app_settings_post_rejects_default_change_on_legacy_history(self):
+        # Sin cuentas guardadas, la cuenta implícita (legacy, ~/.claude) ya tiene histórico:
+        # cambiar el default en el primer guardado lo reinterpretaría.
+        swapped = [dict(self.ACCOUNTS[0], default=False), dict(self.ACCOUNTS[1], default=True)]
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._post("/api/app-settings", {"client_roots": clients.default_roots(), "accounts": swapped})
+        self.assertEqual(ctx.exception.code, 400)
+        self.assertIsNone(history.saved_accounts(self.db_path))
 
     def test_app_settings_post_rejects_two_defaults_without_writing(self):
         bad = [dict(a, default=True) for a in self.ACCOUNTS]

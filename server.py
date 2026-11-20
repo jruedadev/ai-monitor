@@ -216,7 +216,10 @@ def make_handler(static_dir, broker, db_path=None, engine_opts=None):
                 if body is _INVALID:
                     return
                 try:
-                    clean = history.validate_app_settings(body, stored=history.saved_accounts(db_path))
+                    # Base de comparación: lo guardado o, si no hay nada, las cuentas legacy
+                    # (la cuenta implícita que ya tiene histórico bajo claude_code).
+                    stored = history.get_app_settings(db_path=db_path)["accounts"]
+                    clean = history.validate_app_settings(body, stored=stored)
                 except history.AppSettingsError as exc:
                     self._send_json(json.dumps({"error": str(exc)}), status=400)
                     return
