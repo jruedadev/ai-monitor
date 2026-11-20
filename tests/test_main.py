@@ -5,6 +5,7 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
+from collectors.claude_code import collect as claude_code_real
 from main import collect_all, combine_projects
 
 
@@ -15,13 +16,81 @@ class TestCombineProjects(unittest.TestCase):
         opencode = {"/home/user/other": {"total_tokens": 30, "cost": 0.02, "messages": 1, "session_count": 1}}
         hermes = {}
 
-        combined = combine_projects(claude, codex, opencode, hermes)
+        combined = combine_projects({"claude_code": claude, "codex": codex,
+                                     "opencode": opencode, "hermes": hermes})
 
         self.assertEqual(combined["/home/user/demo"]["total_tokens"], 150)
         self.assertAlmostEqual(combined["/home/user/demo"]["cost"], 0.15)
         self.assertEqual(sorted(combined["/home/user/demo"]["by_source"]), ["claude_code", "codex"])
         self.assertEqual(combined["/home/user/other"]["total_tokens"], 30)
         self.assertEqual(combined["/home/user/other"]["by_source"], ["opencode"])
+
+
+    def test_combine_projects_sums_all_claude_accounts(self):
+        p = {"total_tokens": 10, "messages": 1, "session_count": 1}
+        combined = combine_projects({
+            "claude_code": {"/p": {**p, "cost": 1}},
+            "claude_code@robc": {"/p": {**p, "cost": 2}},
+        })
+        self.assertEqual(combined["/p"]["cost"], 3)
+        self.assertEqual(combined["/p"]["total_tokens"], 20)
+        self.assertEqual(sorted(combined["/p"]["by_source"]), ["claude_code", "claude_code@robc"])
+
+    def test_combine_projects_excludes_openrouter(self):
+        combined = combine_projects({
+            "claude_code": {},
+            "openrouter": {"/p": {"total_tokens": 5, "cost": 9, "messages": 1, "session_count": 1}},
+        })
+        self.assertEqual(combined, {})
+
+
+def _account(id_, location, default=False):
+    return {"id": id_, "provider": "claude_code", "label": id_, "location": location,
+            "default": default, "monthly_cost": None, "start_date": None}
+
+
+class TestCollectAllAccounts(unittest.TestCase):
+    def _patch_others(self):
+        return [patch("main.codex.collect", return_value={}),
+                patch("main.opencode.collect", return_value={}),
+                patch("main.hermes.collect", return_value={}),
+                patch("main.openrouter.collect", return_value={"unavailable": True, "reason": "x"}),
+                patch("main.history.record_snapshot")]
+
+    def test_collect_all_calls_claude_once_per_account(self):
+        accounts = [_account("personal", "/a/.claude", True), _account("robc", "/b/.claude-robc")]
+        patches = self._patch_others()
+        for p in patches:
+            p.start()
+        try:
+            with patch("main.claude_code.collect", return_value={}) as collect:
+                result = collect_all(account_list=accounts)
+        finally:
+            for p in patches:
+                p.stop()
+        self.assertEqual(collect.call_count, 2)
+        dirs = [c.kwargs["projects_dir"] for c in collect.call_args_list]
+        self.assertEqual(dirs, ["/a/.claude/projects", "/b/.claude-robc/projects"])
+        self.assertIn("claude_code", result)
+        self.assertIn("claude_code@robc", result)
+        for key in ("codex", "opencode", "hermes", "openrouter"):
+            self.assertIn(key, result)
+
+    def test_collect_all_skips_missing_dir_without_error(self):
+        accounts = [_account("personal", "/a/.claude", True),
+                    _account("ghost", "/no/existe/jamas")]
+        patches = self._patch_others()
+        for p in patches:
+            p.start()
+        try:
+            with patch("main.claude_code.collect",
+                       side_effect=lambda projects_dir=None, db_path=None:
+                       claude_code_real(projects_dir=projects_dir)):
+                result = collect_all(account_list=accounts)
+        finally:
+            for p in patches:
+                p.stop()
+        self.assertEqual(result["claude_code@ghost"], {})
 
 
 class TestCollectAll(unittest.TestCase):

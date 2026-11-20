@@ -45,7 +45,7 @@ def _app_settings_payload(db_path):
 
 def _recompute_and_maybe_publish(broker):
     sources = main.collect_all()
-    combined = main.combine_projects(sources["claude_code"], sources["codex"], sources["opencode"], sources["hermes"])
+    combined = main.combine_projects(sources)
     payload = json.dumps({"sources": sources, "combined": combined}, sort_keys=True)
 
     with _state_lock:

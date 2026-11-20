@@ -15,14 +15,21 @@ from datetime import datetime, timezone
 from collectors import claude_code, codex, opencode, openrouter, hermes
 from dashboard import template
 import briefing
+import accounts
 import history
 
 
-def combine_projects(claude_data, codex_data, opencode_data, hermes_data):
+PROJECT_SOURCES = ("codex", "opencode", "hermes")
+
+
+def combine_projects(sources):
+    """Suma por proyecto todas las cuentas de Claude Code, Codex, OpenCode y Hermes.
+    OpenRouter nunca entra: no tiene proyectos locales."""
     combined = defaultdict(lambda: {"total_tokens": 0, "cost": 0.0, "messages": 0,
                                      "session_count": 0, "by_source": []})
-    for source_name, data in (("claude_code", claude_data), ("codex", codex_data),
-                               ("opencode", opencode_data), ("hermes", hermes_data)):
+    for source_name, data in sources.items():
+        if not (accounts.is_claude_source(source_name) or source_name in PROJECT_SOURCES):
+            continue
         for project, v in data.items():
             c = combined[project]
             c["total_tokens"] += v.get("total_tokens", 0)
@@ -34,14 +41,19 @@ def combine_projects(claude_data, codex_data, opencode_data, hermes_data):
     return {k: {**v, "cost": round(v["cost"], 4)} for k, v in combined.items()}
 
 
-def collect_all(db_path=None):
-    sources = {
-        "claude_code": claude_code.collect(),
-        "codex": codex.collect(),
-        "opencode": opencode.collect(),
-        "hermes": hermes.collect(),
-        "openrouter": openrouter.collect(),
-    }
+def collect_all(db_path=None, account_list=None):
+    if account_list is None:
+        account_list = history.get_app_settings(db_path=db_path)["accounts"]
+    sources = {}
+    for acc in account_list:
+        if acc["provider"] != "claude_code":
+            continue
+        sources[accounts.source_name(acc)] = claude_code.collect(
+            projects_dir=accounts.claude_projects_dir(acc))
+    sources["codex"] = codex.collect()
+    sources["opencode"] = opencode.collect()
+    sources["hermes"] = hermes.collect()
+    sources["openrouter"] = openrouter.collect()
     history.record_snapshot(sources, db_path=db_path)
     return sources
 
@@ -78,7 +90,7 @@ def main():
         print(briefing.format_briefing(briefing.get_briefing()))
         return
 
-    combined = combine_projects(sources["claude_code"], sources["codex"], sources["opencode"], sources["hermes"])
+    combined = combine_projects(sources)
 
     if args.html:
         generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")

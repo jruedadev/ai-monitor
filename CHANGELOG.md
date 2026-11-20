@@ -8,6 +8,7 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 
 ### Añadido
 - Soporte para varias cuentas de Claude Code: el histórico guarda cada cuenta por separado y la lista de cuentas se conserva en los ajustes.
+- Cada cuenta de Claude Code se recolecta por separado; el panel suma todas las cuentas de Claude en la vista combinada.
 - Se modela el concepto de cuentas por proveedor (por ahora Claude Code), con validación de ids, cuenta por defecto, ruta y costo. Todavía no es visible en la interfaz.
 - El motor de recomendaciones puede usar modelos de OpenRouter a través de Hermes. Por defecto usa Claude Haiku 5.5 y DeepSeek V4 Flash como respaldo; cada llamada tiene un tope de 0,05 USD.
 
