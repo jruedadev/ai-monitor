@@ -6,13 +6,17 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 
 ## [Sin publicar]
 
+## [1.3.0] - 2026-11-20
+
 ### Añadido
+- Varias cuentas de suscripción de Claude Code: cada cuenta tiene su costo mensual, su fecha de inicio y su propio veredicto suscripción frente a API. Se configuran en Ajustes, en "Cuentas de suscripción".
+- Selector de fuente por cuenta en Inicio, Proyectos y Sesiones; "Claude Code (todas)" suma todas las cuentas.
 - Ajustes permite configurar varias cuentas de Claude Code con su costo y fecha de inicio, y el Inicio muestra el veredicto de cada una y deja filtrar por cuenta.
 - El Inicio muestra el veredicto suscripción frente a API por cada cuenta de Claude Code.
 - El Inicio permite elegir una cuenta de Claude Code concreta (`claude_code@<id>`) y Ajustes puede guardar varias cuentas, rechazando configuraciones inválidas sin escribir nada.
 - Soporte para varias cuentas de Claude Code: el histórico guarda cada cuenta por separado y la lista de cuentas se conserva en los ajustes.
 - Cada cuenta de Claude Code se recolecta por separado; el panel suma todas las cuentas de Claude en la vista combinada.
-- Se modela el concepto de cuentas por proveedor (por ahora Claude Code), con validación de ids, cuenta por defecto, ruta y costo. Todavía no es visible en la interfaz.
+- Las cuentas se validan al guardar: ids únicos, exactamente una cuenta por defecto y rutas absolutas. Una configuración inválida se rechaza sin escribir nada.
 - El motor de recomendaciones puede usar modelos de OpenRouter a través de Hermes. Por defecto usa Claude Haiku 5.5 y DeepSeek V4 Flash como respaldo; cada llamada tiene un tope de 0,05 USD.
 
 ### Corregido
@@ -51,7 +55,8 @@ Primera versión estable.
 - Motor de recomendaciones: lectura y redacción local de prompts, clustering, LLM opcional (Hermes free o `claude -p`) con heurística de respaldo, señales de costo y timer diario de systemd.
 - Raíces de cliente configurables (modos `cliente` y `plano`) y onboarding en `/bienvenida`.
 
-[Sin publicar]: https://github.com/jruedadev/ai-monitor/compare/v1.2.0...HEAD
+[Sin publicar]: https://github.com/jruedadev/ai-monitor/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/jruedadev/ai-monitor/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/jruedadev/ai-monitor/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/jruedadev/ai-monitor/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/jruedadev/ai-monitor/releases/tag/v1.0.0

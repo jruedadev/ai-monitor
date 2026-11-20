@@ -144,6 +144,10 @@ El filtro de fuente es global (`?fuente=claude-code|codex|opencode|hermes|openro
 
 `server.py` (y también `main.py`, en cada ejecución) guarda un rollup diario por proyecto/modelo en `~/.local/share/ai-monitor/history.db` (SQLite). Si Claude Code, Codex, OpenCode o Hermes eventualmente rotan o truncan sesiones viejas, ese histórico local no se pierde — el gráfico de tendencia del dashboard interactivo (`GET /api/history`) lee de ahí, no de los datos en vivo.
 
+## Varias cuentas por proveedor
+
+Si usas más de una suscripción de Claude Code (por ejemplo, una personal y otra de trabajo), añádelas en Ajustes → "Cuentas de suscripción". Para cada cuenta indica un id, una etiqueta, la carpeta de datos de Claude Code (ruta absoluta), el costo mensual y la fecha de inicio. Exactamente una cuenta debe ser la de por defecto. El Inicio, Proyectos y Sesiones permiten elegir una cuenta concreta o "Claude Code (todas)". Las cuentas existentes siguen funcionando sin cambios.
+
 ## Oficina
 
 La vista `/oficina` del dashboard muestra cada sesión de los últimos 30 minutos como un personaje pixel-art que
