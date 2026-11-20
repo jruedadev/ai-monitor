@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { accountSourceLabel, normalizeFuente } from "@/lib/sources";
 import { parseSource, sourceSlug } from "@/lib/routes";
+import type { Account } from "@/lib/api";
 
 describe("fuente de una cuenta", () => {
   it("normalizeFuente acepta la forma con guion del enlace del briefing", () => {
@@ -20,5 +21,14 @@ describe("fuente de una cuenta", () => {
 
   it("accountSourceLabel", () => {
     expect(accountSourceLabel("Trabajo")).toBe("Trabajo (Claude Code)");
+  });
+});
+
+describe("parseSource con cuentas configuradas", () => {
+  const accounts = [{ id: "robc" }] as Account[];
+  it("acepta una cuenta existente y cae a all si el id no existe", () => {
+    expect(parseSource("claude-code@robc", accounts)).toBe("claude_code@robc");
+    expect(parseSource("claude-code@viejo", accounts)).toBe("all");
+    expect(parseSource("codex", accounts)).toBe("codex");
   });
 });

@@ -1,4 +1,4 @@
-import { snapshotSource, type SourceKey } from "@/lib/sources";
+import { isAccountSource, snapshotKeys, type SourceKey } from "@/lib/sources";
 import type { SessionDetailEntry, UsageSnapshot } from "@/lib/api";
 
 export interface FlatSession extends SessionDetailEntry {
@@ -15,11 +15,15 @@ export function collectSessions(
   project?: string,
 ): FlatSession[] {
   if (!sources) return [];
-  const sourceKeys = section === "all" ? SESSION_SOURCES : section === "openrouter" ? [] : ([snapshotSource(section)] as const);
+  const sourceKeys: string[] =
+    section === "all"
+      ? [...SESSION_SOURCES, ...Object.keys(sources).filter(isAccountSource)]
+      : section === "openrouter" ? [] : snapshotKeys(sources, section);
+  const bySource = sources as unknown as Record<string, UsageSnapshot["sources"]["claude_code"] | undefined>;
 
   const rows: FlatSession[] = [];
   for (const key of sourceKeys) {
-    for (const [name, usage] of Object.entries(sources[key] ?? {})) {
+    for (const [name, usage] of Object.entries(bySource[key] ?? {})) {
       if (project && name !== project) continue;
       for (const session of usage.sessions_detail) {
         rows.push({ ...session, source: key, project: name });

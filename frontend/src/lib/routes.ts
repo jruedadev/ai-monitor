@@ -87,10 +87,13 @@ export function viewPath(view: ViewKey, client?: string | null): string {
   return VIEW_PATH[view];
 }
 
-export function parseSource(slug: string | null): SourceKey {
+/** `accounts` (si se conocen): un id de cuenta que ya no existe cae a "all" en vez de provocar un 400. */
+export function parseSource(slug: string | null, accounts?: { id: string }[]): SourceKey {
   if (!slug) return "all";
   const account = normalizeFuente(slug);
-  if (isAccountSource(account)) return account;
+  if (isAccountSource(account)) {
+    return !accounts || accounts.some((a) => `claude_code@${a.id}` === account) ? account : "all";
+  }
   return SLUG_SOURCE[slug] || "all";
 }
 

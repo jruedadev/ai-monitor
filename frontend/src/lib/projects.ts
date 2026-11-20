@@ -1,6 +1,6 @@
 import type { ProjectUsage, UsageSnapshot } from "@/lib/api";
 import { clientOf, type ClientRoot } from "@/lib/clients";
-import { snapshotSource, type SourceKey } from "@/lib/sources";
+import { snapshotKeys, type SourceKey } from "@/lib/sources";
 
 /** Proyectos (o modelos, en OpenRouter) para una fuente, opcionalmente acotados a un cliente. */
 export function projectsFor(
@@ -25,12 +25,23 @@ export function projectsFor(
       ]),
     );
   } else {
-    result = Object.fromEntries(
-      Object.entries(sources[snapshotSource(source)]).map(([name, v]) => [
-        name,
-        { total_tokens: v.total_tokens, cost: v.cost, messages: v.messages, session_count: v.session_count, by_source: [snapshotSource(source)] },
-      ]),
-    );
+    result = {};
+    const bySource = sources as unknown as Record<string, UsageSnapshot["sources"]["claude_code"] | undefined>;
+    for (const key of snapshotKeys(sources, source)) {
+      for (const [name, v] of Object.entries(bySource[key] ?? {})) {
+        const prev = result[name];
+        result[name] = prev
+          ? {
+              ...prev,
+              total_tokens: prev.total_tokens + v.total_tokens,
+              cost: prev.cost + v.cost,
+              messages: prev.messages + v.messages,
+              session_count: prev.session_count + v.session_count,
+              by_source: [...prev.by_source, key],
+            }
+          : { total_tokens: v.total_tokens, cost: v.cost, messages: v.messages, session_count: v.session_count, by_source: [key] };
+      }
+    }
   }
 
   if (!client) return result;

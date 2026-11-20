@@ -9,7 +9,10 @@ function optionsFor(accounts: Account[]) {
   const extra = accounts
     .filter((a) => !a.default)
     .map((a) => ({ key: `claude_code@${a.id}` as SourceKey, label: accountSourceLabel(a.label) }));
-  return [...BASE_OPTIONS, ...extra];
+  const base = extra.length === 0
+    ? BASE_OPTIONS
+    : BASE_OPTIONS.map((o) => (o.key === "claude_code" ? { ...o, label: "Claude Code (todas)" } : o));
+  return [...base, ...extra];
 }
 
 interface SourceFilterProps {

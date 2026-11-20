@@ -13,6 +13,27 @@ const sources = {
   openrouter: { unavailable: false, models: { "m-1": { tokens: 7, cost: 4, requests: 3 } } },
 } as UsageSnapshot["sources"];
 
+const twoAccounts = {
+  claude_code: { "/p/a": usage(5), "/p/shared": usage(1) },
+  "claude_code@robc": { "/p/b": usage(7), "/p/shared": usage(2) },
+  codex: {}, opencode: {}, hermes: {}, openrouter: { unavailable: true },
+} as unknown as UsageSnapshot["sources"];
+
+describe("projectsFor con varias cuentas", () => {
+  it("una cuenta da solo sus proyectos", () => {
+    const r = projectsFor(twoAccounts, combined, "claude_code@robc", null, DEFAULT_CLIENT_ROOTS);
+    expect(Object.keys(r).sort()).toEqual(["/p/b", "/p/shared"]);
+    expect(r["/p/shared"].cost).toBe(2);
+    expect(r["/p/b"].by_source).toEqual(["claude_code@robc"]);
+  });
+  it("claude_code suma todas las cuentas", () => {
+    const r = projectsFor(twoAccounts, combined, "claude_code", null, DEFAULT_CLIENT_ROOTS);
+    expect(Object.keys(r).sort()).toEqual(["/p/a", "/p/b", "/p/shared"]);
+    expect(r["/p/shared"].cost).toBe(3);
+    expect(r["/p/shared"].total_tokens).toBe(20);
+  });
+});
+
 describe("projectsFor", () => {
   it("all usa la vista combinada y filtra por cliente", () => {
     expect(Object.keys(projectsFor(sources, combined, "all", null, DEFAULT_CLIENT_ROOTS))).toHaveLength(2);

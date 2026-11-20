@@ -4,6 +4,7 @@ import {
   COMPARE_PARAM, DAY_PARAM, PROJECT_PARAM, SOURCE_PARAM, legacyRedirect, parsePath, parseSource, searchForSource,
   type DashboardLocation,
 } from "@/lib/routes";
+import { useAppSettings } from "@/hooks/appSettingsContext";
 import type { SourceKey } from "@/lib/sources";
 
 export interface DashboardRoute extends DashboardLocation {
@@ -25,6 +26,7 @@ export function useDashboardRoute(): DashboardRoute {
   const { pathname, search, state } = useLocation();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
+  const { accounts } = useAppSettings();
   const parsed = parsePath(pathname);
 
   const setParam = useCallback(
@@ -66,7 +68,7 @@ export function useDashboardRoute(): DashboardRoute {
     client: parsed?.client ?? null,
     valid: parsed !== null,
     redirect: parsed ? null : legacyRedirect(pathname, search),
-    source: parseSource(params.get(SOURCE_PARAM)),
+    source: parseSource(params.get(SOURCE_PARAM), accounts),
     compare: params.get(COMPARE_PARAM),
     selectedDate: params.get(DAY_PARAM),
     selectedProject: params.get(PROJECT_PARAM),

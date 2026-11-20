@@ -38,9 +38,11 @@ export function sourceMeta(source: string): SourceMeta {
   return SOURCE_META[isAccountSource(source) ? "claude_code" : source];
 }
 
-/** El snapshot en vivo agrupa todas las cuentas de Claude Code bajo `claude_code`. */
-export function snapshotSource(source: Exclude<SourceKey, "all">): Exclude<SourceKey, "all" | `claude_code@${string}`> {
-  return isAccountSource(source) ? "claude_code" : source;
+/** Claves del snapshot (`sources`) que alimenta una fuente. Cada cuenta de Claude Code vive en su
+ * propia clave (`claude_code` = cuenta default, `claude_code@<id>` = el resto); `claude_code` las suma. */
+export function snapshotKeys(sources: object, source: Exclude<SourceKey, "all" | "openrouter">): string[] {
+  if (source !== "claude_code") return [source];
+  return Object.keys(sources).filter((k) => k === "claude_code" || isAccountSource(k));
 }
 
 export function accountSourceLabel(label: string): string {
