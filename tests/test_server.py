@@ -8,6 +8,8 @@ import urllib.error
 import urllib.request
 from unittest.mock import patch
 
+import clients
+import history
 import server
 
 
@@ -173,6 +175,54 @@ class TestServerAPI(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             self._get("/api/briefing?source=copilot")
         self.assertEqual(ctx.exception.code, 400)
+
+    ACCOUNTS = [
+        {"id": "personal", "provider": "claude_code", "label": "Personal", "location": "/home/u/.claude",
+         "default": True, "monthly_cost": 20, "start_date": None},
+        {"id": "robc", "provider": "claude_code", "label": "Robc", "location": "/home/u/.claude-robc",
+         "default": False, "monthly_cost": 100, "start_date": None},
+    ]
+
+    def _save_accounts(self, accounts):
+        history.save_app_settings({"client_roots": clients.default_roots(), "accounts": accounts}, self.db_path)
+
+    def test_briefing_accepts_account_source(self):
+        self._save_accounts(self.ACCOUNTS)
+        status, body = self._get("/api/briefing?source=claude_code@robc")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["source"], "claude_code@robc")
+
+    def test_briefing_unknown_account_is_400(self):
+        self._save_accounts(self.ACCOUNTS)
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._get("/api/briefing?source=claude_code@nope")
+        self.assertEqual(ctx.exception.code, 400)
+        self.assertIn("Fuente desconocida", json.loads(ctx.exception.read())["error"])
+
+    def test_app_settings_post_rejects_two_defaults_without_writing(self):
+        bad = [dict(a, default=True) for a in self.ACCOUNTS]
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._post("/api/app-settings", {"client_roots": clients.default_roots(), "accounts": bad})
+        self.assertEqual(ctx.exception.code, 400)
+        _, body = self._get("/api/app-settings")
+        ids = [a["id"] for a in json.loads(body)["accounts"]]
+        self.assertEqual(ids, ["personal"])
+        self.assertNotIn("robc", ids)
+
+    def test_app_settings_roundtrip_accounts(self):
+        status, _ = self._post("/api/app-settings",
+                               {"client_roots": clients.default_roots(), "accounts": self.ACCOUNTS})
+        self.assertEqual(status, 200)
+        _, body = self._get("/api/app-settings")
+        self.assertEqual(json.loads(body)["accounts"], self.ACCOUNTS)
+
+    def test_app_settings_degraded_includes_accounts(self):
+        import sqlite3
+        with patch("server.history.get_app_settings", side_effect=sqlite3.Error("x")):
+            _, body = self._get("/api/app-settings")
+        data = json.loads(body)
+        self.assertTrue(data["degraded"])
+        self.assertEqual([a["id"] for a in data["accounts"]], ["personal"])
 
 
 class TestActivityEndpoint(unittest.TestCase):

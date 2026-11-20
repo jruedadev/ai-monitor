@@ -8,6 +8,7 @@ Todos los cambios relevantes de este proyecto se documentan aquí. El formato si
 
 ### Añadido
 - El Inicio muestra el veredicto suscripción frente a API por cada cuenta de Claude Code.
+- El Inicio permite elegir una cuenta de Claude Code concreta (`claude_code@<id>`) y Ajustes puede guardar varias cuentas, rechazando configuraciones inválidas sin escribir nada.
 - Soporte para varias cuentas de Claude Code: el histórico guarda cada cuenta por separado y la lista de cuentas se conserva en los ajustes.
 - Cada cuenta de Claude Code se recolecta por separado; el panel suma todas las cuentas de Claude en la vista combinada.
 - Se modela el concepto de cuentas por proveedor (por ahora Claude Code), con validación de ids, cuenta por defecto, ruta y costo. Todavía no es visible en la interfaz.

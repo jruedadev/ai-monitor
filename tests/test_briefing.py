@@ -568,6 +568,23 @@ class TestClientRoots(unittest.TestCase):
         history.save_app_settings({"client_roots": roots}, self.db)
         self.assertEqual(briefing.load_client_roots(self.db), roots)
 
+    def test_load_accounts_corrupt_json_falls_back_to_legacy(self):
+        history.save_app_settings({"client_roots": clients.default_roots()}, self.db)
+        con = sqlite3.connect(self.db)
+        con.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('accounts', '{no', 'x')")
+        con.commit()
+        con.close()
+        result = briefing.load_accounts(self.db, NO_SETTINGS)
+        self.assertEqual([a["id"] for a in result], ["personal"])
+
+    def test_load_accounts_missing_table_returns_legacy(self):
+        con = sqlite3.connect(self.db)
+        con.execute("CREATE TABLE daily_project (date TEXT, source TEXT, project TEXT, tokens INTEGER, cost REAL)")
+        con.commit()
+        con.close()
+        result = briefing.load_accounts(self.db, NO_SETTINGS)
+        self.assertEqual([a["id"] for a in result], ["personal"])
+
     def test_get_briefing_uses_saved_roots(self):
         history.save_app_settings({"client_roots": [{"root": "work", "mode": "cliente"}]}, self.db)
         history.record_snapshot(

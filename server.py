@@ -13,6 +13,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
+import accounts
 import briefing
 import clients
 import history
@@ -40,7 +41,9 @@ def _app_settings_payload(db_path):
     try:
         return {**history.get_app_settings(db_path=db_path), "degraded": False}
     except sqlite3.Error:
-        return {"client_roots": clients.default_roots(), "onboarding_completed_at": None, "degraded": True}
+        return {"client_roots": clients.default_roots(),
+                "accounts": accounts.legacy_accounts({}),
+                "onboarding_completed_at": None, "degraded": True}
 
 
 def _recompute_and_maybe_publish(broker):
