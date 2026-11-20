@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UsageSnapshot } from "@/lib/api";
-import { collectSessions, sessionDurationSeconds, toEpochMs } from "@/lib/sessions";
+import { collectSessions, groupSessionsBySource, sessionDurationSeconds, toEpochMs } from "@/lib/sessions";
 
 describe("toEpochMs", () => {
   it("interpreta ISO, segundos y milisegundos", () => {
@@ -37,4 +37,12 @@ describe("collectSessions con varias cuentas", () => {
   it("una cuenta da solo sus sesiones", () => expect(ids("claude_code@robc")).toEqual(["s-robc"]));
   it("claude_code suma todas las cuentas", () => expect(ids("claude_code")).toEqual(["s-def", "s-robc"]));
   it("all incluye las cuentas de Claude", () => expect(ids("all")).toEqual(["s-def", "s-robc"]));
+});
+
+describe("groupSessionsBySource", () => {
+  it("agrupa por fuente, incluidas las claves de cuenta", () => {
+    const row = (source: string) => ({ source, project: "/p", session_id: source, tokens: 1, cost: 1, title: null, first_ts: null, last_ts: null, cwd: null, date: null });
+    const groups = groupSessionsBySource([row("claude_code@robc"), row("codex"), row("claude_code")]);
+    expect(groups.map((g) => g.source)).toEqual(["claude_code", "codex", "claude_code@robc"]);
+  });
 });

@@ -18,6 +18,12 @@ export function sources(entries: Record<string, Record<string, SessionDetailEntr
 }
 
 describe("deriveOfficeAgents", () => {
+  it("una sesión de cuenta extra se normaliza a claude_code", () => {
+    const entry = { session_id: "x", tokens: 1, cost: 1, title: null, first_ts: new Date(NOW - 60_000).toISOString(), last_ts: new Date(NOW - 60_000).toISOString(), cwd: null, date: null } as SessionDetailEntry;
+    const agents = deriveOfficeAgents(sources({ "claude_code@robc": { "/p/r": [entry] } }), NOW);
+    expect(agents[0].source).toBe("claude_code");
+  });
+
   it("convierte cada sesión reciente en un agente básico: thinking < 3 min, idle después", () => {
     const agents = deriveOfficeAgents(
       sources({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountSourceLabel, normalizeFuente } from "@/lib/sources";
+import { accountSourceLabel, normalizeFuente, sourceChipLabel, sourceMeta } from "@/lib/sources";
 import { parseSource, sourceSlug } from "@/lib/routes";
 import type { Account } from "@/lib/api";
 
@@ -30,5 +30,14 @@ describe("parseSource con cuentas configuradas", () => {
     expect(parseSource("claude-code@robc", accounts)).toBe("claude_code@robc");
     expect(parseSource("claude-code@viejo", accounts)).toBe("all");
     expect(parseSource("codex", accounts)).toBe("codex");
+  });
+});
+
+describe("identidad de una fuente de cuenta", () => {
+  it("sourceMeta y la etiqueta del chip no fallan con claves de cuenta", () => {
+    expect(sourceMeta("claude_code@robc").label).toBe("Claude Code");
+    expect(sourceChipLabel("claude_code@robc")).toBe("Claude Code (robc)");
+    expect(sourceChipLabel("codex")).toBe("Codex");
+    expect(sourceChipLabel("raro")).toBe("raro");
   });
 });

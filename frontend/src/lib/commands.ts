@@ -3,7 +3,7 @@ import { clientOf, groupProjectsByClient, type ClientRoot } from "@/lib/clients"
 import { formatDate } from "@/lib/format";
 import { sourceSlug, viewPath, type ViewKey } from "@/lib/routes";
 import { collectSessions } from "@/lib/sessions";
-import { SOURCE_META, type SourceKey } from "@/lib/sources";
+import { sourceMeta, type SourceKey } from "@/lib/sources";
 import { basename } from "@/lib/tree";
 
 export const COMMAND_GROUPS = ["Vistas", "Clientes", "Proyectos", "Sesiones"] as const;
@@ -68,7 +68,7 @@ export function buildCommandEntries(
       id: `session:${s.source}:${s.session_id}`,
       group: "Sesiones",
       label: s.title as string,
-      hint: `${SOURCE_META[s.source].label} · ${formatDate(s.date as string)}`,
+      hint: `${sourceMeta(s.source).label} · ${formatDate(s.date as string)}`,
       // La sesión lleva su propia fuente en el link: sin esto, abrir una sesión de Codex
       // desde ?fuente=hermes quedaría filtrado a Hermes vía withSource (no la sobreescribe).
       to: `/actividad?dia=${s.date}&fuente=${sourceSlug(s.source as SourceKey)}`,

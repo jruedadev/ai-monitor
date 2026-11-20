@@ -33,6 +33,13 @@ export function collectSessions(
   return rows;
 }
 
+/** Agrupa por fuente: primero las fijas en su orden, luego las cuentas extra. */
+export function groupSessionsBySource(rows: FlatSession[]) {
+  const present = Array.from(new Set(rows.map((r) => r.source)));
+  const order = [...SESSION_SOURCES.filter((s) => present.includes(s)), ...present.filter((s) => !(SESSION_SOURCES as readonly string[]).includes(s)).sort()];
+  return order.map((source) => ({ source, rows: rows.filter((r) => r.source === source).sort((a, b) => b.tokens - a.tokens) }));
+}
+
 /**
  * claude_code usa ISO (string), codex y hermes epoch en segundos y opencode epoch en ms.
  * Un número > 1e12 ya está en ms (1e12 s sería el año 33658).

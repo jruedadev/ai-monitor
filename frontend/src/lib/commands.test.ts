@@ -45,3 +45,20 @@ describe("buildCommandEntries", () => {
     expect(new Set(entries.map((e) => e.id)).size).toBe(entries.length);
   });
 });
+
+describe("sesiones de cuentas extra", () => {
+  const withAccount = {
+    ...sources,
+    "claude_code@robc": {
+      "/home/u/DEV/ACME/app": {
+        sessions_detail: [{ session_id: "s9", tokens: 1, cost: 1, title: "Sesión robc", first_ts: null, last_ts: null, cwd: null, date: "2026-09-22" }],
+      },
+    },
+  } as unknown as UsageSnapshot["sources"];
+  it("no lanza y enlaza con la fuente de la cuenta", () => {
+    const entries = buildCommandEntries(withAccount, combined, DEFAULT_CLIENT_ROOTS);
+    const e = entries.find((x) => x.label === "Sesión robc");
+    expect(e?.hint).toContain("Claude Code");
+    expect(e?.to).toContain("fuente=claude-code@robc");
+  });
+});

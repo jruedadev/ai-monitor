@@ -45,6 +45,12 @@ export function snapshotKeys(sources: object, source: Exclude<SourceKey, "all" |
   return Object.keys(sources).filter((k) => k === "claude_code" || isAccountSource(k));
 }
 
+/** Etiqueta de chip: una cuenta extra se distingue por su id (`Claude Code (robc)`). */
+export function sourceChipLabel(source: string): string {
+  if (isAccountSource(source)) return `Claude Code (${source.slice("claude_code@".length)})`;
+  return SOURCE_META[source]?.label ?? source;
+}
+
 export function accountSourceLabel(label: string): string {
   return `${label} (Claude Code)`;
 }

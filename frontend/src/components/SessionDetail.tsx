@@ -2,8 +2,8 @@ import { Fragment } from "react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { SOURCE_META } from "@/lib/sources";
-import { collectSessions, SESSION_SOURCES, type FlatSession } from "@/lib/sessions";
+import { sourceChipLabel, sourceMeta } from "@/lib/sources";
+import { collectSessions, groupSessionsBySource } from "@/lib/sessions";
 import { SessionIdentity } from "@/components/SessionIdentity";
 import type { SourceKey } from "@/lib/sources";
 import type { UsageSnapshot } from "@/lib/api";
@@ -18,12 +18,6 @@ interface SessionDetailProps {
   selectedDate: string | null;
   onSelectDate: (date: string | null) => void;
   onSelectProject?: (project: string) => void;
-}
-
-function groupBySource(rows: FlatSession[]) {
-  return SESSION_SOURCES
-    .map((source) => ({ source, rows: rows.filter((r) => r.source === source).sort((a, b) => b.tokens - a.tokens) }))
-    .filter((g) => g.rows.length > 0);
 }
 
 export function SessionDetail({
@@ -44,7 +38,7 @@ export function SessionDetail({
   ])).sort((a, b) => b.localeCompare(a));
 
   const filtered = selectedDate ? allSessions.filter((s) => s.date === selectedDate) : allSessions;
-  const groups = section === "all" ? groupBySource(filtered) : [{ source: section, rows: filtered.sort((a, b) => b.tokens - a.tokens) }];
+  const groups = section === "all" ? groupSessionsBySource(filtered) : [{ source: section, rows: filtered.sort((a, b) => b.tokens - a.tokens) }];
 
   return (
     <div>
@@ -68,13 +62,13 @@ export function SessionDetail({
       ) : (
         <div className="space-y-6">
           {groups.map(({ source, rows }) => {
-            const meta = SOURCE_META[source];
+            const meta = sourceMeta(source);
             const Icon = meta?.icon;
             return (
               <Fragment key={source}>
                 <div className="flex items-center gap-2 mb-2">
                   {Icon && <Icon className="h-4 w-4" style={{ color: meta.color }} aria-hidden />}
-                  <h3 className="text-sm font-semibold">{meta?.label ?? source}</h3>
+                  <h3 className="text-sm font-semibold">{sourceChipLabel(source)}</h3>
                   <span className="text-xs text-muted-foreground">({rows.length})</span>
                 </div>
                 <div className="rounded-xl border bg-card overflow-hidden">

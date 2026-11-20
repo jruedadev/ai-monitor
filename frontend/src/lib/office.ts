@@ -3,6 +3,7 @@
  * colector, ~60 s). La actividad en vivo (herramienta en curso) llega por /api/activity y se
  * fusiona en lib/activity.ts.
  */
+import { isAccountSource } from "@/lib/sources";
 import { SESSION_SOURCES, collectSessions, toEpochMs } from "@/lib/sessions";
 import type { UsageSnapshot } from "@/lib/api";
 import type { ActivityState, ToolKind } from "@/lib/activity";
@@ -43,7 +44,8 @@ export function deriveOfficeAgents(
     if (lastMs === null || lastMs > nowMs + CLOCK_SKEW_MS || nowMs - lastMs > OFFICE_WINDOW_MS) continue;
     agents.push({
       key: `${s.source}:${s.session_id}`,
-      source: s.source as OfficeAgent["source"],
+      // Office solo conoce las cuatro fuentes base: una cuenta extra de Claude se pinta como claude_code.
+      source: (isAccountSource(s.source) ? "claude_code" : s.source) as OfficeAgent["source"],
       project: s.project,
       label: basename(s.project),
       state: nowMs - lastMs < BASIC_THINKING_MS ? "thinking" : "idle",
