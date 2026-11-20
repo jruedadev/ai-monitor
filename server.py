@@ -216,7 +216,7 @@ def make_handler(static_dir, broker, db_path=None, engine_opts=None):
                 if body is _INVALID:
                     return
                 try:
-                    clean = history.validate_app_settings(body)
+                    clean = history.validate_app_settings(body, stored=history.saved_accounts(db_path))
                 except history.AppSettingsError as exc:
                     self._send_json(json.dumps({"error": str(exc)}), status=400)
                     return

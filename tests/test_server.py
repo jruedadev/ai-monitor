@@ -199,6 +199,27 @@ class TestServerAPI(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 400)
         self.assertIn("Fuente desconocida", json.loads(ctx.exception.read())["error"])
 
+    def test_briefing_dashed_account_source_is_400(self):
+        self._save_accounts(self.ACCOUNTS)
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._get("/api/briefing?source=claude-code@robc")
+        self.assertEqual(ctx.exception.code, 400)
+
+    def test_briefing_with_missing_db_does_not_create_it(self):
+        if os.path.exists(self.db_path):  # la recolección inicial en segundo plano ya lo creó
+            os.unlink(self.db_path)
+        status, _ = self._get("/api/briefing")
+        self.assertEqual(status, 200)
+        self.assertFalse(os.path.exists(self.db_path))
+
+    def test_app_settings_post_rejects_default_change_without_writing(self):
+        self._save_accounts(self.ACCOUNTS)
+        swapped = [dict(self.ACCOUNTS[0], default=False), dict(self.ACCOUNTS[1], default=True)]
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self._post("/api/app-settings", {"client_roots": clients.default_roots(), "accounts": swapped})
+        self.assertEqual(ctx.exception.code, 400)
+        self.assertEqual(history.get_app_settings(self.db_path)["accounts"], self.ACCOUNTS)
+
     def test_app_settings_post_rejects_two_defaults_without_writing(self):
         bad = [dict(a, default=True) for a in self.ACCOUNTS]
         with self.assertRaises(urllib.error.HTTPError) as ctx:

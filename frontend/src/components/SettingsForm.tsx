@@ -3,9 +3,13 @@ import { AlertCircle, Check, Save } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RoiFields } from "@/components/RoiFields";
 import { fetchRoiSettings, saveRoiSettings } from "@/lib/api";
-import { roiPayload, toRoiDraft, type RoiDraft } from "@/lib/roiDraft";
+import { useAppSettings } from "@/hooks/appSettingsContext";
+import { roiPayload, roiPlansForAccounts, toRoiDraft, type RoiDraft } from "@/lib/roiDraft";
 
 export function SettingsForm() {
+  const { accounts } = useAppSettings();
+  const plans = roiPlansForAccounts(["claude", "codex"], accounts);
+  const claudeByAccounts = !plans.includes("claude");
   const [draft, setDraft] = useState<RoiDraft | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -32,7 +36,7 @@ export function SettingsForm() {
   const handleSave = async () => {
     setSaveStatus("saving");
     try {
-      setDraft(toRoiDraft(await saveRoiSettings(roiPayload(draft))));
+      setDraft(toRoiDraft(await saveRoiSettings(roiPayload(draft, claudeByAccounts))));
       setSaveStatus("saved");
     } catch (err) {
       console.error("Error al guardar /api/roi-settings:", err);
@@ -48,7 +52,12 @@ export function SettingsForm() {
           Con el costo mensual el Inicio y ROI comparan tu suscripción contra el precio de la API; la tarifa por hora estima el valor generado.
         </p>
       </div>
-      <RoiFields draft={draft} onChange={update} />
+      {claudeByAccounts && (
+        <p className="text-sm text-muted-foreground">
+          El plan de Claude Code se configura en «Cuentas de suscripción».
+        </p>
+      )}
+      <RoiFields draft={draft} plans={plans} onChange={update} />
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"

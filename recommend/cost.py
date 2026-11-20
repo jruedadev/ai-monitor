@@ -57,10 +57,11 @@ def _draft(signal, source, project):
             f"de {label}. Con eso el dashboard compara suscripción frente a precio de API.")
 
 
-def cost_recommendations(project_rows, model_rows, settings, today, roots=None):
+def cost_recommendations(project_rows, model_rows, settings, today, roots=None, accounts=None):
     out = []
     for source in briefing.PROJECT_SOURCES:
-        ctx = briefing.build_context(project_rows, model_rows, settings, today, source, roots=roots)
+        ctx = briefing.build_context(project_rows, model_rows, settings, today, source, roots=roots,
+                                accounts=accounts)
         for rule in PERSISTED_RULES:
             signal = rule(ctx)
             if not signal or not _worth_persisting(signal, ctx):

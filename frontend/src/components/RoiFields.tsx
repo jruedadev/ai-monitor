@@ -51,23 +51,27 @@ interface AccountFieldsProps {
   onSetDefault: () => void;
   onRemove: () => void;
   canRemove: boolean;
+  /** La cuenta por defecto guardada no cambia: radio deshabilitado y ubicación de solo lectura. */
+  defaultLocked?: boolean;
+  locationLocked?: boolean;
 }
 
 /** Una fila por cuenta: nombre, directorio de configuración, costo, inicio, default y quitar. */
-export function AccountFields({ account, onChange, onSetDefault, onRemove, canRemove }: AccountFieldsProps) {
+export function AccountFields({ account, onChange, onSetDefault, onRemove, canRemove, defaultLocked = false, locationLocked = false }: AccountFieldsProps) {
   return (
     <fieldset className="space-y-3 rounded-lg border p-4">
       <legend className="px-1 text-xs text-muted-foreground">Cuenta {account.id}</legend>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <TextField label="Nombre" value={account.label} onChange={(v) => onChange({ label: v })} maxLength={40} />
-        <TextField label="Directorio de Claude (ruta absoluta)" value={account.location} placeholder="/home/usuario/.claude" onChange={(v) => onChange({ location: v })} />
+        <TextField label="Directorio de Claude (ruta absoluta)" value={account.location} placeholder="/ruta/absoluta/a/.claude" readOnly={locationLocked} onChange={(v) => onChange({ location: v })} />
         <Field label="Costo mensual ($)" value={account.monthly_cost?.toString() ?? ""} onChange={(v) => onChange({ monthly_cost: v === "" ? null : Number(v) })} />
         <Field type="date" label="Inicio de la suscripción" value={account.start_date ?? ""} onChange={(v) => onChange({ start_date: v || null })} />
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="inline-flex items-center gap-2 text-sm">
-          <input type="radio" name="default-claude-account" checked={account.default} onChange={onSetDefault} />
+          <input type="radio" name="default-claude-account" checked={account.default} disabled={defaultLocked} onChange={onSetDefault} />
           Cuenta por defecto
+          {defaultLocked && <span className="text-xs text-muted-foreground">(no se puede cambiar: reinterpretaría el histórico)</span>}
         </label>
         <button
           type="button"
@@ -83,8 +87,8 @@ export function AccountFields({ account, onChange, onSetDefault, onRemove, canRe
   );
 }
 
-function TextField({ label, value, onChange, placeholder, maxLength }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; maxLength?: number;
+function TextField({ label, value, onChange, placeholder, maxLength, readOnly }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; maxLength?: number; readOnly?: boolean;
 }) {
   return (
     <label className="block space-y-1.5">
@@ -94,6 +98,7 @@ function TextField({ label, value, onChange, placeholder, maxLength }: {
         value={value}
         placeholder={placeholder}
         maxLength={maxLength}
+        readOnly={readOnly}
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
       />

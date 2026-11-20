@@ -180,6 +180,10 @@ def _analyze(settings, db_path, today, prompt_overrides, session_tokens, runner,
         roots = briefing.load_client_roots(db_path or history.DB_PATH_DEFAULT)
     except sqlite3.Error:
         roots = clients.default_roots()
+    try:
+        saved_accounts = briefing.load_accounts(db_path or history.DB_PATH_DEFAULT, roi)
+    except sqlite3.Error:
+        saved_accounts = None
 
     fields = {"model": None, "attempts": 0, "llm_tokens": 0, "llm_cost": 0.0}
     texts, generators, degraded = {}, {}, False
@@ -235,7 +239,8 @@ def _analyze(settings, db_path, today, prompt_overrides, session_tokens, runner,
     totals = _source_totals(project_rows, since, today.isoformat())
     pattern_recs = [_pattern_rec(c, texts.get(c.cluster_id), generators.get(c.cluster_id),
                                   fields["model"], totals) for c in groups]
-    cost_recs = cost.cost_recommendations(project_rows, model_rows, roi, today, roots=roots)
+    cost_recs = cost.cost_recommendations(project_rows, model_rows, roi, today, roots=roots,
+                                          accounts=saved_accounts)
     counts = store.apply_run(db_path, pattern_recs, cost_recs, now_iso())
     return {"status": "degraded" if degraded else "ok", **fields, "prompts": len(prompts),
             "clusters": len(groups), **counts, "error": "; ".join(errors)[:1000] or None}

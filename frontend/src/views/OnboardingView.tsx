@@ -13,7 +13,7 @@ import {
 import type { ClientRoot } from "@/lib/clients";
 import { ONBOARDING_STEPS, saveOnboarding, skipOutcome, suggestBackend, suggestRoots, type OnboardingDraft } from "@/lib/onboarding";
 import { BACKEND_OPTIONS, parseChain } from "@/lib/recommendations";
-import { plansWithData, roiPayload, toRoiDraft, type RoiDraft } from "@/lib/roiDraft";
+import { plansWithData, roiPayload, roiPlansForAccounts, toRoiDraft, type RoiDraft } from "@/lib/roiDraft";
 import { projectPaths, sourceStatuses } from "@/lib/settings";
 
 const API = { saveAppSettings, saveRoiSettings, saveEngineSettings, completeOnboarding };
@@ -28,7 +28,7 @@ interface Loaded {
 
 export function OnboardingView({ sources }: { sources: UsageSnapshot["sources"] | null }) {
   const navigate = useNavigate();
-  const { roots: savedRoots, completedAt, reload } = useAppSettings();
+  const { roots: savedRoots, accounts, completedAt, reload } = useAppSettings();
   const firstTime = completedAt === null;
   const paths = projectPaths(sources);
   const statuses = sourceStatuses(sources);
@@ -82,10 +82,11 @@ export function OnboardingView({ sources }: { sources: UsageSnapshot["sources"] 
   if (!loaded || !effectiveRoots) return <Shell><Skeleton className="h-72 w-full rounded-xl" /></Shell>;
 
   const current = ONBOARDING_STEPS[step];
-  const plans = plansWithData(statuses);
+  const plans = roiPlansForAccounts(plansWithData(statuses), accounts);
+  const claudeByAccounts = accounts.length > 0 && plansWithData(statuses).includes("claude");
   const draft: OnboardingDraft = {
     roots: effectiveRoots,
-    roi: roiPayload(loaded.roi),
+    roi: roiPayload(loaded.roi, accounts.length > 0),
     engine: { backend: loaded.backend, llm_chain: parseChain(loaded.chain) },
   };
 
@@ -113,6 +114,11 @@ export function OnboardingView({ sources }: { sources: UsageSnapshot["sources"] 
               ? "Con el costo de tu suscripción el dashboard la compara contra el precio de la API. Puedes dejarlo vacío y completarlo después."
               : "Aún no hay datos de Claude Code ni de Codex; podrás indicar tu suscripción en Configuración cuando los haya."}
           </p>
+          {claudeByAccounts && (
+            <p className="text-sm text-muted-foreground">
+              El plan de Claude Code se configura en «Cuentas de suscripción», en Configuración.
+            </p>
+          )}
           <RoiFields draft={loaded.roi} plans={plans} onChange={(key, value) => setLoaded({ ...loaded, roi: { ...loaded.roi, [key]: value } })} />
         </div>
       )}

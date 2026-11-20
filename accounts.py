@@ -32,6 +32,10 @@ def _normalize_one(raw):
     location = raw.get("location")
     if not isinstance(location, str) or not os.path.isabs(location):
         raise AccountsError("location debe ser una ruta absoluta en %s" % acc_id)
+    location = os.path.normpath(location)
+    if os.path.basename(location) == "projects":
+        raise AccountsError(
+            "location apunta a projects en %s: indique la carpeta padre que contiene projects/" % acc_id)
     is_default = raw.get("default")
     if not isinstance(is_default, bool):
         raise AccountsError("default debe ser booleano en %s" % acc_id)
@@ -56,6 +60,9 @@ def normalize_accounts(payload):
     ids = [a["id"] for a in result]
     if len(set(ids)) != len(ids):
         raise AccountsError("hay ids de cuenta repetidos")
+    locations = [a["location"] for a in result]
+    if len(set(locations)) != len(locations):
+        raise AccountsError("hay cuentas con la misma ubicación")
     for provider in sorted({a["provider"] for a in result} | {DEFAULT_PROVIDER}):
         defaults = [a for a in result if a["provider"] == provider and a["default"]]
         if len(defaults) != 1:

@@ -476,6 +476,20 @@ class TestSqlite(unittest.TestCase):
         self.assertEqual(data["attention"], [])
         self.assertEqual(data["kpis"]["cost"]["current"], 0)
 
+    def test_degraded_db_accepts_account_shaped_source(self):
+        with open(self.db, "wb") as f:
+            f.write(b"esto no es una base sqlite" * 200)
+        data = briefing.get_briefing(db_path=self.db, today=TODAY, source="claude_code@robc")
+        self.assertTrue(data["degraded"])
+        self.assertEqual(data["source"], "claude_code@robc")
+
+    def test_degraded_db_still_rejects_malformed_source(self):
+        with open(self.db, "wb") as f:
+            f.write(b"esto no es una base sqlite" * 200)
+        for bad in ("claude-code@robc", "claude_code@", "claude_code@A B", "codex@x"):
+            with self.assertRaises(briefing.BriefingError):
+                briefing.get_briefing(db_path=self.db, today=TODAY, source=bad)
+
     def test_reads_rows_models_and_text_start_date(self):
         self._insert(
             [("2026-08-27", "claude_code", APP, 10, 4.0), ("2026-09-20", "claude_code", APP, 10, 6.0),

@@ -162,7 +162,7 @@ function SourceRoiCard({
     <div className="rounded-xl border bg-card p-5 space-y-3">
       <div className="flex items-center gap-2">
         <meta.icon className="h-4 w-4" style={{ color: meta.color }} aria-hidden />
-        <h3 className="text-sm font-medium">{meta.label}</h3>
+        <h3 className="text-sm font-medium">{meta.label}{source === "claude_code" && " (cuenta por defecto)"}</h3>
       </div>
 
       <Row

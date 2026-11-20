@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addAccountDraft, plansWithData, removeAccountDraft, roiPayload, toRoiDraft, validateAccountDrafts,
+  addAccountDraft, hasSavedDefault, isLocationLocked, plansWithData, roiPlansForAccounts, removeAccountDraft, roiPayload, toRoiDraft, validateAccountDrafts,
   type AccountDraft,
 } from "@/lib/roiDraft";
 import type { SourceStatus } from "@/lib/settings";
@@ -64,5 +64,35 @@ describe("cuentas", () => {
   it("removeAccountDraft: quita una cuenta normal, pero no la única default", () => {
     expect(removeAccountDraft(two, "trabajo").map((a) => a.id)).toEqual(["personal"]);
     expect(removeAccountDraft(two, "personal")).toBe(two);
+  });
+});
+
+describe("cuenta por defecto guardada", () => {
+  const saved = [acc(), acc({ id: "trabajo", default: false, location: "/home/u/.claude-work" })];
+
+  it("hasSavedDefault: solo si ya hay una cuenta por defecto guardada", () => {
+    expect(hasSavedDefault(saved)).toBe(true);
+    expect(hasSavedDefault([])).toBe(false);
+  });
+
+  it("isLocationLocked: solo la ubicación de la cuenta por defecto guardada", () => {
+    expect(isLocationLocked(saved, saved[0])).toBe(true);
+    expect(isLocationLocked(saved, saved[1])).toBe(false);
+    expect(isLocationLocked(saved, acc({ id: "nueva", default: false }))).toBe(false);
+  });
+
+  it("roiPlansForAccounts: con cuentas guardadas quita el plan de Claude", () => {
+    expect(roiPlansForAccounts(["claude", "codex"], saved)).toEqual(["codex"]);
+    expect(roiPlansForAccounts(["claude", "codex"], [])).toEqual(["claude", "codex"]);
+  });
+});
+
+describe("roiPayload omitClaude", () => {
+  it("no envía los campos de Claude cuando las cuentas los gobiernan", () => {
+    const draft = toRoiDraft({
+      subscription_cost_claude: 20, subscription_cost_codex: 5, hourly_rate: 35,
+      subscription_start_claude: "2026-07-18", subscription_start_codex: null,
+    });
+    expect(roiPayload(draft, true)).toEqual({ subscription_cost_codex: 5, hourly_rate: 35, subscription_start_codex: null });
   });
 });

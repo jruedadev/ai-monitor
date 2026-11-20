@@ -15,7 +15,14 @@ export function toRoiDraft(s: RoiSettings): RoiDraft {
   };
 }
 
-export function roiPayload(d: RoiDraft): Partial<RoiSettings> {
+export function roiPayload(d: RoiDraft, omitClaude = false): Partial<RoiSettings> {
+  const full = roiPayloadFull(d);
+  if (!omitClaude) return full;
+  const { subscription_cost_claude: _cost, subscription_start_claude: _start, ...rest } = full;
+  return rest;
+}
+
+function roiPayloadFull(d: RoiDraft): Partial<RoiSettings> {
   return {
     subscription_cost_claude: d.subscription_cost_claude ? Number(d.subscription_cost_claude) : null,
     subscription_cost_codex: d.subscription_cost_codex ? Number(d.subscription_cost_codex) : null,
@@ -87,4 +94,19 @@ export function setDefaultAccountDraft(drafts: AccountDraft[], id: string): Acco
 
 export function updateAccountDraft(drafts: AccountDraft[], id: string, patch: Partial<AccountDraft>): AccountDraft[] {
   return drafts.map((a) => (a.id === id ? { ...a, ...patch } : a));
+}
+
+/** La cuenta por defecto guardada no puede cambiar (reinterpretaría el histórico): ni su marca ni su ubicación. */
+export function hasSavedDefault(saved: AccountDraft[], provider: AccountDraft["provider"] = DEFAULT_PROVIDER): boolean {
+  return saved.some((a) => a.provider === provider && a.default);
+}
+
+/** El directorio de la cuenta por defecto ya guardada es de solo lectura. */
+export function isLocationLocked(saved: AccountDraft[], account: AccountDraft): boolean {
+  return saved.some((a) => a.id === account.id && a.default);
+}
+
+/** Con cuentas guardadas, el plan de Claude se edita en "Cuentas de suscripción", no en los campos de ROI. */
+export function roiPlansForAccounts(plans: RoiPlan[], accounts: AccountDraft[]): RoiPlan[] {
+  return accounts.length > 0 ? plans.filter((plan) => plan !== "claude") : plans;
 }

@@ -65,3 +65,12 @@ class TestCost(unittest.TestCase):
 
     def test_no_rows_no_recommendations(self):
         self.assertEqual(cost.cost_recommendations([], [], {}, TODAY), [])
+
+
+class TestCostWithAccounts(unittest.TestCase):
+    def test_saved_accounts_prevent_subscription_missing(self):
+        rows = [row(f"2026-09-{d:02d}") for d in range(1, 9)]
+        acc = [{"id": "personal", "provider": "claude_code", "label": "Personal", "location": "/x/.claude",
+                "default": True, "monthly_cost": 20, "start_date": "2026-01-05"}]
+        recs = cost.cost_recommendations(rows, [], {}, TODAY, accounts=acc)
+        self.assertNotIn("subscription_missing", {r["signature"]["rule"] for r in recs})

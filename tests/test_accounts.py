@@ -26,6 +26,19 @@ def robc(**kw):
 
 
 class TestNormalize(unittest.TestCase):
+    def test_location_is_normalised(self):
+        out = accounts.normalize_accounts([acct(location="/home/u/./x/../.claude/"), robc()])
+        self.assertEqual(out[0]["location"], "/home/u/.claude")
+
+    def test_rejects_duplicate_locations_after_normalising(self):
+        with self.assertRaises(accounts.AccountsError):
+            accounts.normalize_accounts([acct(), robc(location="/home/u/x/../.claude/")])
+
+    def test_rejects_location_ending_in_projects(self):
+        with self.assertRaises(accounts.AccountsError) as ctx:
+            accounts.normalize_accounts([acct(location="/home/u/.claude/projects/"), robc()])
+        self.assertIn("projects", str(ctx.exception))
+
     def test_normalize_accepts_two_claude_accounts(self):
         payload = [acct(), robc()]
         self.assertEqual(accounts.normalize_accounts(payload), payload)

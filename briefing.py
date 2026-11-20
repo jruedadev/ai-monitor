@@ -107,6 +107,8 @@ def valid_sources(accounts):
             + tuple(accounts_mod.source_name(a) for a in accounts))
 
 
+_ACCOUNT_SOURCE_RE = re.compile(r"claude_code(@[a-z0-9-]{1,32})?")
+
 VALID_SOURCES = valid_sources(accounts_mod.legacy_accounts({}))
 
 
@@ -426,7 +428,7 @@ def build_briefing(project_rows, model_rows, settings, today, source="all", comp
                    roots=None, accounts=None):
     if accounts is None:
         accounts = accounts_mod.legacy_accounts(settings)
-    if source not in valid_sources(accounts):
+    if source not in valid_sources(accounts) and not (degraded and _ACCOUNT_SOURCE_RE.fullmatch(source)):
         raise BriefingError(f"Fuente desconocida: {source}")
     if compare is not None and not _MONTH_RE.match(compare):
         raise BriefingError("El parámetro compare debe tener el formato YYYY-MM")

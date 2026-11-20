@@ -246,7 +246,29 @@ def _stored_accounts(raw, db_path):
     return accounts.legacy_accounts(get_roi_settings(db_path))
 
 
-def validate_app_settings(payload):
+def saved_accounts(db_path=None):
+    """Cuentas guardadas explícitamente (None si no hay o son ilegibles). Solo lectura:
+    no crea la base ni cae a las cuentas legacy."""
+    db_path = db_path or DB_PATH_DEFAULT
+    if not os.path.exists(db_path):
+        return None
+    try:
+        con = sqlite3.connect(db_path, timeout=5)
+        try:
+            row = con.execute("SELECT value FROM app_settings WHERE key = 'accounts'").fetchone()
+        finally:
+            con.close()
+        return accounts.normalize_accounts(json.loads(row[0])) if row else None
+    except (sqlite3.Error, ValueError, TypeError):
+        return None
+
+
+def _default_claude(account_list):
+    return next((a for a in account_list
+                 if a["provider"] == accounts.DEFAULT_PROVIDER and a["default"]), None)
+
+
+def validate_app_settings(payload, stored=None):
     if not isinstance(payload, dict):
         raise AppSettingsError("El cuerpo debe ser un objeto JSON")
     unknown = sorted(set(payload) - set(APP_SETTINGS_WRITABLE))
@@ -263,6 +285,11 @@ def validate_app_settings(payload):
             clean["accounts"] = accounts.normalize_accounts(payload["accounts"])
         except accounts.AccountsError as exc:
             raise AppSettingsError(str(exc)) from exc
+        old, new = _default_claude(stored or []), _default_claude(clean["accounts"])
+        if old and (new["id"] != old["id"] or new["location"] != old["location"]):
+            raise AppSettingsError(
+                "No se puede cambiar la cuenta por defecto ni su ubicación: reinterpretaría el "
+                "histórico ya guardado bajo claude_code")
     return clean
 
 
@@ -283,6 +310,10 @@ def save_app_settings(settings, db_path=None):
     _put_app_setting(db_path, "client_roots", settings["client_roots"])
     if "accounts" in settings:
         _put_app_setting(db_path, "accounts", settings["accounts"])
+        default = _default_claude(settings["accounts"])
+        # Mantiene los campos antiguos de ROI alineados con la cuenta por defecto (downgrade seguro).
+        save_roi_settings({"subscription_cost_claude": default["monthly_cost"],
+                           "subscription_start_claude": default["start_date"]}, db_path)
 
 
 def complete_onboarding(db_path=None, now=None):

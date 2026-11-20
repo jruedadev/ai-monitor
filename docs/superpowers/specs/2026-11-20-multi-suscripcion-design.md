@@ -1,8 +1,8 @@
 # Multi-suscripción de Claude Code
 
 - **Fecha:** 2026-11-20
-Versión objetivo: 1.3.0 (MINOR) — desde 1.2.0
-- **Estado:** diseño pendiente de aprobación del autor
+- **Versión objetivo:** 1.3.0 (MINOR) — desde 1.2.0
+- **Estado:** aprobado e implementado en v1.3.0
 - **Contexto:** el autor tiene dos suscripciones de Claude de 20 USD/mes. La personal (`~/.claude`) lleva tiempo activa. La de ROBC (`~/.claude-robc`) empezó el 19 de noviembre de 2026 y se usa solo desde `~/DEV/ROBC/` mediante `CLAUDE_CONFIG_DIR` (archivo `.envrc` + `direnv`). ai-monitor hoy solo lee `~/.claude/projects`, así que no ve el uso de ROBC.
 
 ## 1. Objetivo y criterios de éxito

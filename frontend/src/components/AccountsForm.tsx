@@ -4,7 +4,7 @@ import { AccountFields } from "@/components/RoiFields";
 import { useAppSettings } from "@/hooks/appSettingsContext";
 import { errorDetail, saveAppSettings } from "@/lib/api";
 import {
-  addAccountDraft, removeAccountDraft, setDefaultAccountDraft, updateAccountDraft, validateAccountDrafts,
+  addAccountDraft, hasSavedDefault, isLocationLocked, removeAccountDraft, setDefaultAccountDraft, updateAccountDraft, validateAccountDrafts,
   type AccountDraft,
 } from "@/lib/roiDraft";
 
@@ -46,8 +46,8 @@ export function AccountsForm() {
       <div>
         <h2 id="accounts-title" className="text-sm font-medium">Cuentas de suscripción</h2>
         <p className="text-sm text-muted-foreground">
-          Si usas varias cuentas de Claude Code, indica el directorio de configuración de cada una (por ejemplo{" "}
-          <code className="font-mono">~/.claude</code>) con su costo mensual y fecha de inicio. El Inicio compara cada una contra la API.
+          Si usas varias cuentas de Claude Code, indica el directorio de configuración de cada una (ruta absoluta, por ejemplo{" "}
+          <code className="font-mono">/ruta/absoluta/a/.claude</code>) con su costo mensual y fecha de inicio. El Inicio compara cada una contra la API.
         </p>
       </div>
       <div className="space-y-3">
@@ -58,6 +58,8 @@ export function AccountsForm() {
             onChange={(patch) => edit(updateAccountDraft(current, account.id, patch))}
             onSetDefault={() => edit(setDefaultAccountDraft(current, account.id))}
             onRemove={() => edit(removeAccountDraft(current, account.id))}
+            defaultLocked={hasSavedDefault(accounts)}
+            locationLocked={isLocationLocked(accounts, account)}
             canRemove={removeAccountDraft(current, account.id) !== current}
           />
         ))}
