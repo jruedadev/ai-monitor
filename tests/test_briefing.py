@@ -201,6 +201,120 @@ class TestSubscription(unittest.TestCase):
         self.assertFalse(data["subscription"]["configured"])
 
 
+def account(acc_id="personal", cost=20.0, start=None, default=None, label=None):
+    default = (acc_id == "personal") if default is None else default
+    return {"id": acc_id, "provider": "claude_code", "label": label or acc_id.capitalize(),
+            "location": "/h/.claude-" + acc_id, "default": default, "monthly_cost": cost, "start_date": start}
+
+
+def build_accounts(rows, accts, source="all"):
+    return briefing.build_briefing(list(rows), [], NO_SETTINGS, TODAY, source=source, accounts=accts)
+
+
+def by_id(data):
+    return {a["id"]: a for a in data["accounts"]}
+
+
+class TestAccountsVerdict(unittest.TestCase):
+    def test_subscription_summary_robc_starts_on_its_date(self):
+        rows = [row("2026-09-05", source="claude_code@robc", cost=50),
+                row("2026-09-19", source="claude_code@robc", cost=30),
+                row("2026-09-20", source="claude_code@robc", cost=10)]
+        accts = [account("personal", cost=None), account("robc", cost=20.0, start="2026-09-19")]
+        summary = briefing.subscription_summary("claude_code@robc", rows, accts, ("2026-09-01", "2026-09-27"))
+        self.assertEqual(summary, {"configured": True, "paid": 20.0, "api_equivalent": 40.0,
+                                   "winner": "subscription", "savings": 20.0})
+
+    def test_all_sums_paid_across_accounts(self):
+        rows = [row("2026-09-05", cost=30), row("2026-09-05", source="claude_code@robc", cost=50)]
+        data = build_accounts(rows, [account("personal"), account("robc", default=False)])
+        self.assertEqual(data["subscription"]["paid"], 40.0)
+        self.assertEqual(data["subscription"]["api_equivalent"], 80.0)
+
+    def test_account_without_cost_is_not_configured(self):
+        data = build_accounts([row("2026-09-05")], [account("personal"), account("robc", cost=None)])
+        self.assertTrue(by_id(data)["personal"]["configured"])
+        entry = by_id(data)["robc"]
+        self.assertFalse(entry["configured"])
+        self.assertIsNone(entry["paid"])
+        self.assertEqual(entry["source"], "claude_code@robc")
+
+    def test_future_start_date_is_not_configured(self):
+        data = build_accounts([row("2026-09-05")], [account("personal", start="2026-10-05")])
+        self.assertFalse(by_id(data)["personal"]["configured"])
+        self.assertFalse(data["subscription"]["configured"])
+
+    def test_per_account_verdict_uses_only_its_rows(self):
+        rows = [row("2026-09-05", cost=30), row("2026-09-06", source="claude_code@robc", cost=7)]
+        data = build_accounts(rows, [account("personal"), account("robc", default=False)])
+        self.assertEqual(by_id(data)["personal"]["api_equivalent"], 30.0)
+        self.assertEqual(by_id(data)["robc"]["api_equivalent"], 7.0)
+        self.assertEqual(by_id(data)["robc"]["winner"], "api")
+        self.assertEqual(set(by_id(data)["robc"]),
+                         {"id", "label", "source", "configured", "paid", "api_equivalent", "winner", "savings"})
+
+    def test_missing_dir_shows_sin_datos_not_error(self):
+        # Cuenta sin filas en daily_project (directorio ausente): sin datos, no error.
+        data = build_accounts([row("2026-09-05", cost=30)], [account("personal"), account("robc", default=False)])
+        entry = by_id(data)["robc"]
+        self.assertTrue(entry["configured"])
+        self.assertEqual(entry["api_equivalent"], 0.0)
+        self.assertEqual(entry["paid"], 20.0)
+
+    def test_claude_code_source_combines_all_accounts_and_account_source_filters(self):
+        rows = [row("2026-09-05", cost=30), row("2026-09-06", source="claude_code@robc", cost=7)]
+        accts = [account("personal"), account("robc", default=False)]
+        both = build_accounts(rows, accts, source="claude_code")
+        self.assertEqual(both["kpis"]["cost"]["current"], 37.0)
+        self.assertEqual(both["subscription"]["paid"], 40.0)
+        only = build_accounts(rows, accts, source="claude_code@robc")
+        self.assertEqual(only["kpis"]["cost"]["current"], 7.0)
+        self.assertEqual(only["subscription"]["paid"], 20.0)
+        self.assertEqual(only["subscription"]["api_equivalent"], 7.0)
+
+    def test_unknown_account_source_is_rejected(self):
+        with self.assertRaises(briefing.BriefingError):
+            build_accounts([], [account("personal")], source="claude_code@robc")
+
+    def test_legacy_settings_still_produce_claude_verdict(self):
+        data = build([row("2026-09-03", cost=657.10)], cfg=settings(subscription_cost_claude=20.0))
+        self.assertEqual(data["subscription"], {"configured": True, "paid": 20.0, "api_equivalent": 657.1,
+                                                "winner": "subscription", "savings": 637.1})
+        self.assertEqual([a["id"] for a in data["accounts"]], ["personal"])
+
+    def test_codex_subscription_keeps_working_from_settings(self):
+        data = build([row("2026-09-03", source="codex", cost=100)], source="codex",
+                     cfg=settings(subscription_cost_codex=25.0))
+        self.assertEqual(data["subscription"]["paid"], 25.0)
+        self.assertEqual(data["subscription"]["api_equivalent"], 100.0)
+        self.assertNotIn("codex", by_id(data))
+
+    def test_missing_rule_and_labels_use_accounts(self):
+        rows = [row(f"2026-09-0{d}", source="claude_code@robc") for d in (1, 2, 3)]
+        accts = [account("personal"), account("robc", cost=None, default=False, label="ROBC")]
+        data = build_accounts(rows, accts, source="claude_code@robc")
+        signal = next(s for s in data["attention"] if s["id"] == "subscription_missing")
+        self.assertIn("ROBC (Claude Code)", signal["title"])
+
+    def test_get_briefing_reads_accounts_from_db(self):
+        import json
+        import shutil
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        db = os.path.join(tmp, "history.db")
+        history.ensure_schema(db)
+        con = sqlite3.connect(db)
+        con.execute("INSERT INTO daily_project (date, source, project, tokens, cost) VALUES (?,?,?,?,?)",
+                    ("2026-09-05", "claude_code@robc", APP, 10, 9.0))
+        con.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('accounts', ?, '2026-09-01')",
+                    (json.dumps([account("personal"), account("robc", default=False)]),))
+        con.commit()
+        con.close()
+        data = briefing.get_briefing(db_path=db, today=TODAY, source="claude_code@robc")
+        self.assertEqual(by_id(data)["robc"]["api_equivalent"], 9.0)
+        self.assertEqual(by_id(data)["personal"]["api_equivalent"], 0.0)
+
+
 class TestTopProjects(unittest.TestCase):
     def test_top_three_by_cost_with_share_and_client(self):
         rows = [
@@ -418,7 +532,7 @@ class TestBuildContext(unittest.TestCase):
         self.assertEqual([r["tokens"] for r in ctx["rows"]], [5, 7])
         self.assertEqual([r["tokens"] for r in ctx["window_rows"]], [5])
         self.assertEqual(set(ctx), {"source", "today", "window", "rows", "window_rows",
-                                    "project_rows", "model_rows", "settings", "roots"})
+                                    "project_rows", "model_rows", "settings", "roots", "accounts"})
 
 
 

@@ -4,6 +4,7 @@ proveedores. Lógica en funciones puras sobre filas; SQLite en una capa delgada.
 Spec: docs/superpowers/specs/2026-09-27-inicio-briefing-design.md
 """
 import calendar
+import json
 import logging
 import math
 import os
@@ -13,18 +14,15 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
+import accounts as accounts_mod
 import clients
 import history
 
 log = logging.getLogger(__name__)
 
 PROJECT_SOURCES = ("claude_code", "codex", "opencode", "hermes")
-VALID_SOURCES = ("all",) + PROJECT_SOURCES + ("openrouter",)
-# Fuentes con suscripción posible → (clave de costo, clave de fecha de inicio) en roi_settings.
-SUBSCRIPTION_KEYS = {
-    "claude_code": ("subscription_cost_claude", "subscription_start_claude"),
-    "codex": ("subscription_cost_codex", "subscription_start_codex"),
-}
+# Codex todavía no tiene cuentas (spec multi-suscripción §8): su plan sigue en roi_settings.
+CODEX_KEYS = ("subscription_cost_codex", "subscription_start_codex")
 SOURCE_LABELS = {"claude_code": "Claude Code", "codex": "Codex", "opencode": "OpenCode",
                  "hermes": "Hermes", "openrouter": "OpenRouter"}
 SOURCE_SLUGS = {"claude_code": "claude-code", "codex": "codex", "opencode": "opencode",
@@ -103,13 +101,46 @@ def eligible_months(start, current_month):
 
 # --- Filas -------------------------------------------------------------------
 
+def valid_sources(accounts):
+    """Fuentes aceptadas: las fijas más el source de cada cuenta configurada."""
+    return (("all", "codex", "opencode", "hermes", "openrouter")
+            + tuple(accounts_mod.source_name(a) for a in accounts))
+
+
+VALID_SOURCES = valid_sources(accounts_mod.legacy_accounts({}))
+
+
+def subscription_accounts(accounts, settings):
+    """Cuentas con plan: las de Claude Code más Codex, que sigue leyéndose de roi_settings."""
+    cost_key, start_key = CODEX_KEYS
+    codex = {"id": "codex", "provider": "codex", "label": "Codex", "location": "", "default": True,
+             "monthly_cost": settings.get(cost_key), "start_date": settings.get(start_key)}
+    return list(accounts) + [codex]
+
+
+def source_label(source, accounts=()):
+    if source in SOURCE_LABELS:
+        return SOURCE_LABELS[source]
+    for account in accounts:
+        if accounts_mod.source_name(account) == source:
+            return f"{account['label']} (Claude Code)"
+    return source
+
+
+def source_slug(source):
+    return SOURCE_SLUGS.get(source) or source.replace("claude_code", "claude-code", 1)
+
+
 def rows_for_source(source, project_rows, model_rows):
     if source == "openrouter":
         return [{"date": r["date"][:10], "source": "openrouter", "project": None,
                  "tokens": r["tokens"] or 0, "cost": r["cost"]}
                 for r in model_rows if r["model"] == "__all__"]
     if source == "all":
-        return [r for r in project_rows if r["source"] in PROJECT_SOURCES]
+        return [r for r in project_rows
+                if r["source"] in PROJECT_SOURCES or accounts_mod.is_claude_source(r["source"])]
+    if source == "claude_code":  # todas las cuentas de Claude Code (spec §5.2)
+        return [r for r in project_rows if accounts_mod.is_claude_source(r["source"])]
     return [r for r in project_rows if r["source"] == source]
 
 
@@ -146,10 +177,15 @@ def compare_costs(api_cost, subscription_cost):
     return ("subscription" if cents > 0 else "api"), abs(diff)
 
 
-def _subscription_candidates(source):
+def _subscription_candidates(source, accounts):
+    """Cuentas que entran en el veredicto de `source`: todas en "all", todas las del proveedor
+    si `source` es el nombre del proveedor, o solo la cuenta cuyo source coincide."""
     if source == "all":
-        return list(SUBSCRIPTION_KEYS)
-    return [source] if source in SUBSCRIPTION_KEYS else []
+        return list(accounts)
+    by_provider = [a for a in accounts if a["provider"] == source]
+    if by_provider:
+        return by_provider
+    return [a for a in accounts if accounts_mod.source_name(a) == source]
 
 
 def _parse_cost_setting(value):
@@ -171,19 +207,18 @@ def _parse_start_setting(value):
     return text if _DATE_RE.match(text) else None
 
 
-def subscription_summary(source, project_rows, settings, window):
+def _verdict(candidates, project_rows, window):
     configured = []
-    for s in _subscription_candidates(source):
-        cost_key, start_key = SUBSCRIPTION_KEYS[s]
-        cost = _parse_cost_setting(settings.get(cost_key))
+    for account in candidates:
+        cost = _parse_cost_setting(account.get("monthly_cost"))
         if cost is None:
             continue
-        start = _parse_start_setting(settings.get(start_key))
+        start = _parse_start_setting(account.get("start_date"))
         if start is not None and start > window[1]:
             # La suscripción todavía no empieza dentro de esta ventana: se trata como
             # no configurada para este mes, no como "paid $X, api $0".
             continue
-        configured.append((s, cost, start))
+        configured.append((accounts_mod.source_name(account), cost, start))
     if not configured:
         return {"configured": False, "paid": None, "api_equivalent": None, "winner": None, "savings": None}
     paid = sum(cost for _, cost, _ in configured)
@@ -194,6 +229,16 @@ def subscription_summary(source, project_rows, settings, window):
     winner, savings = compare_costs(api, paid)
     return {"configured": True, "paid": round(paid, 2), "api_equivalent": round(api, 2),
             "winner": winner, "savings": round(savings, 2)}
+
+
+def subscription_summary(source, project_rows, accounts, window):
+    return _verdict(_subscription_candidates(source, accounts), project_rows, window)
+
+
+def accounts_summary(accounts, project_rows, window):
+    """Un veredicto por cuenta; una cuenta sin filas queda en 0.0 ("sin datos"), no en error."""
+    return [{"id": a["id"], "label": a["label"], "source": accounts_mod.source_name(a),
+             **_verdict([a], project_rows, window)} for a in accounts]
 
 
 # --- Proyectos -----------------------------------------------------------------
@@ -287,20 +332,22 @@ def rule_cost_incomplete(ctx):
 
 def rule_subscription_missing(ctx):
     missing = []
-    for source in _subscription_candidates(ctx["source"]):
-        if ctx["settings"].get(SUBSCRIPTION_KEYS[source][0]) is not None:
+    for account in _subscription_candidates(ctx["source"], ctx["accounts"]):
+        if account.get("monthly_cost") is not None:
             continue
+        source = accounts_mod.source_name(account)
         rows = in_range([r for r in ctx["project_rows"] if r["source"] == source], *ctx["window"])
         days = len(active_dates(rows))
         if days >= SUBSCRIPTION_MIN_ACTIVE_DAYS:
             missing.append((source, days))
     if not missing:
         return None
-    labels = " y ".join(SOURCE_LABELS[source] for source, _ in missing)
+    label = lambda source: source_label(source, ctx["accounts"])
+    labels = " y ".join(label(source) for source, _ in missing)
     return {
         "id": "subscription_missing", "severity": "info",
         "title": f"Configura tu plan de {labels} para comparar suscripción y API",
-        "evidence": [f"{SOURCE_LABELS[source]}: {days} días activos este mes, sin plan configurado"
+        "evidence": [f"{label(source)}: {days} días activos este mes, sin plan configurado"
                      for source, days in missing],
         "link": "/configuracion",
     }
@@ -334,11 +381,11 @@ def rule_habitual_source_silent(ctx):
             continue
         return {
             "id": "habitual_source_silent", "severity": "warning",
-            "title": f"{SOURCE_LABELS[source]} lleva {silent} días sin datos",
+            "title": f"{source_label(source, ctx['accounts'])} lleva {silent} días sin datos",
             "evidence": [f"Último día con actividad: {format_day(last.isoformat())}",
                          f"Activa {active} de los {HABITUAL_WINDOW_DAYS} días previos; "
                          f"se avisa después de {threshold} días sin datos"],
-            "link": f"/gasto?fuente={SOURCE_SLUGS[source]}",
+            "link": f"/gasto?fuente={source_slug(source)}",
         }
     return None
 
@@ -361,26 +408,31 @@ def evaluate_rules(ctx):
 
 # --- Ensamblado ----------------------------------------------------------------
 
-def build_context(project_rows, model_rows, settings, today, source="all", roots=None):
+def build_context(project_rows, model_rows, settings, today, source="all", roots=None, accounts=None):
     """Contexto que consumen las RULES: lo usan el briefing y el motor de
     recomendaciones (recommend/cost.py), que lo evalúa por fuente."""
     rows = rows_for_source(source, project_rows, model_rows)
+    if accounts is None:
+        accounts = accounts_mod.legacy_accounts(settings)
     window = month_window(month_of(today), today.day)
     return {"source": source, "today": today, "window": window, "rows": rows,
             "window_rows": in_range(rows, *window), "project_rows": project_rows,
             "model_rows": model_rows, "settings": settings,
-            "roots": roots if roots is not None else clients.default_roots()}
+            "roots": roots if roots is not None else clients.default_roots(),
+            "accounts": subscription_accounts(accounts, settings)}
 
 
 def build_briefing(project_rows, model_rows, settings, today, source="all", compare=None, degraded=False,
-                   roots=None):
-    if source not in VALID_SOURCES:
+                   roots=None, accounts=None):
+    if accounts is None:
+        accounts = accounts_mod.legacy_accounts(settings)
+    if source not in valid_sources(accounts):
         raise BriefingError(f"Fuente desconocida: {source}")
     if compare is not None and not _MONTH_RE.match(compare):
         raise BriefingError("El parámetro compare debe tener el formato YYYY-MM")
 
     current = month_of(today)
-    ctx = build_context(project_rows, model_rows, settings, today, source, roots)
+    ctx = build_context(project_rows, model_rows, settings, today, source, roots, accounts)
     rows = ctx["rows"]
     start = min((r["date"] for r in rows), default=None)
     eligible = eligible_months(start, current)
@@ -418,8 +470,8 @@ def build_briefing(project_rows, model_rows, settings, today, source="all", comp
                             "previous": len(active_dates(compare_rows)) if entry else None},
             "cost_incomplete": any(r["cost"] is None for r in window_rows),
         },
-        "subscription": (subscription_summary(source, project_rows, settings, window)
-                         if source != "openrouter" else subscription_summary("openrouter", [], settings, window)),
+        "subscription": subscription_summary(source, project_rows, ctx["accounts"], window),
+        "accounts": accounts_summary(accounts, project_rows, window),
         "top_projects": top_projects(window_rows, ctx["roots"]),
         "attention": evaluate_rules(ctx),
         "degraded": degraded,
@@ -481,22 +533,42 @@ def load_client_roots(db_path):
     return clients.parse_stored_roots(row[0] if row else None)
 
 
+def load_accounts(db_path, settings):
+    """Cuentas guardadas en solo lectura (el briefing nunca crea ni migra history.db).
+    Sin archivo, tabla, clave o con valor inválido → cuentas legacy desde `settings`.
+    Los sqlite3.Error se propagan para que get_briefing los marque como degradados."""
+    if os.path.exists(db_path):
+        con = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)
+        try:
+            tables = {name for (name,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            row = (con.execute("SELECT value FROM app_settings WHERE key = 'accounts'").fetchone()
+                   if "app_settings" in tables else None)
+        finally:
+            con.close()
+        if row and row[0] is not None:
+            try:
+                return accounts_mod.normalize_accounts(json.loads(row[0]))
+            except ValueError:  # JSON corrupto o AccountsError (subclase de ValueError)
+                pass
+    return accounts_mod.legacy_accounts(settings)
+
+
 def get_briefing(db_path=None, source="all", compare=None, today=None):
     db_path = db_path or history.DB_PATH_DEFAULT
     today = today or datetime.now(timezone.utc).date()
-    if source not in VALID_SOURCES:
-        raise BriefingError(f"Fuente desconocida: {source}")
     try:
         project_rows, model_rows, settings = load(db_path)
         roots = load_client_roots(db_path)
+        accounts = load_accounts(db_path, settings)
         degraded = False
     except sqlite3.Error as exc:
         log.warning("briefing: no se pudo leer %s: %s", db_path, exc)
         project_rows, model_rows, settings = [], [], _empty_settings()
         roots = clients.default_roots()
+        accounts = accounts_mod.legacy_accounts(settings)
         degraded = True
-    return build_briefing(project_rows, model_rows, settings, today,
-                          source=source, compare=compare, degraded=degraded, roots=roots)
+    return build_briefing(project_rows, model_rows, settings, today, source=source, compare=compare,
+                          degraded=degraded, roots=roots, accounts=accounts)
 
 
 # --- CLI -------------------------------------------------------------------------
